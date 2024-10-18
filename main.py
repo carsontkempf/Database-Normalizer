@@ -1,20 +1,27 @@
 from normalization_functions import (
-    is_1NF, is_2NF, is_3NF, is_BCNF, is_4NF, is_5NF,
-    decomposeRelation, inputRelation, inputFunctionalDependency, inputData, printRelation
+    is_1NF,
+    is_2NF,
+    is_3NF,
+    is_BCNF,
+    is_4NF,
+    is_5NF,
+    decomposeRelation,
+    inputRelation,
+    inputFunctionalDependency,
+    inputData,
+    printRelation,
 )
 
 
 def main():
-    # Input relation
     relation = inputRelation()
 
     # Input functional dependencies for the relation
     more_fds = input("Add functional dependencies? (yes/no): ").lower()
-    while more_fds == 'yes':
+    while more_fds == "yes":
         inputFunctionalDependency(relation)
         more_fds = input("Add more functional dependencies? (yes/no): ").lower()
 
-    # Print initial relation
     print("Initial Relation:")
     printRelation(relation)
 
@@ -22,7 +29,9 @@ def main():
     violation_attributes_1NF = is_1NF(relation)
     if violation_attributes_1NF:
         print(f"1NF Violation detected in attributes: {violation_attributes_1NF}")
-        child_rel_1, child_rel_2 = decomposeRelation(relation, violation_attributes_1NF[0])
+        child_rel_1, child_rel_2 = decomposeRelation(
+            relation, violation_attributes_1NF[0]
+        )
         print("Child Relation 1:")
         printRelation(child_rel_1)
         print("Child Relation 2:")
@@ -43,7 +52,9 @@ def main():
     # Check BCNF
     violation_fds_BCNF = is_BCNF(relation)
     if violation_fds_BCNF:
-        print(f"BCNF Violation detected in functional dependencies: {violation_fds_BCNF}")
+        print(
+            f"BCNF Violation detected in functional dependencies: {violation_fds_BCNF}"
+        )
 
     # Check 4NF
     violation_fds_4NF = is_4NF(relation)

@@ -44,6 +44,8 @@ class Relation:
         self.functional_dependencies.append(FunctionalDependency(X, Y))
 
     def __repr__(self):
-        return (f"Relation(Name: {self.name}, Attributes: {self.attributes}, "
-                f"Primary Key: {self.primary_key}, Foreign Keys: {self.foreign_keys}, "
-                f"Candidate Keys: {self.candidate_keys}, Functional Dependencies: {self.functional_dependencies})")
+        return (
+            f"Relation(Name: {self.name}, Attributes: {self.attributes}, "
+            f"Primary Key: {self.primary_key}, Foreign Keys: {self.foreign_keys}, "
+            f"Candidate Keys: {self.candidate_keys}, Functional Dependencies: {self.functional_dependencies})"
+        )

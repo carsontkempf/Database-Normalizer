@@ -3,12 +3,15 @@ from classes import Relation, FunctionalDependency
 
 # Normalization Functions
 
+
 # 1NF: Detect if an attribute is of type list
 def is_1NF(relation):
     violation_attributes = []
     for attr in relation.attributes:
-        is_non_atomic = input(f"Is '{attr}' a non-atomic attribute (e.g., list or composite)? (yes/no): ").lower()
-        if is_non_atomic == 'yes':
+        is_non_atomic = input(
+            f"Is '{attr}' a non-atomic attribute (e.g., list or composite)? (yes/no): "
+        ).lower()
+        if is_non_atomic == "yes":
             violation_attributes.append(attr)
     return violation_attributes
 
@@ -44,7 +47,10 @@ def is_BCNF(relation):
 def is_4NF(relation):
     fourth_nf_violations = []
     for fd in relation.functional_dependencies:
-        if not set(fd.get_x()).issuperset(set(relation.primary_key)) and len(fd.get_y()) > 1:
+        if (
+            not set(fd.get_x()).issuperset(set(relation.primary_key))
+            and len(fd.get_y()) > 1
+        ):
             fourth_nf_violations.append(fd)
     return fourth_nf_violations
 
@@ -60,16 +66,17 @@ def is_5NF(relation):
 
 # Global Functions
 
+
 # Decompose Relation
 def decomposeRelation(parent_relation, violation_attribute):
     # Create child relation 1 with violation attribute and parent's primary key
-    child_relation_1 = Relation([violation_attribute] + parent_relation.primary_key)
-    child_relation_1.add_primary_key(violation_attribute)
-    child_relation_1.add_foreign_key(parent_relation.primary_key)
+    child_relation_1 = Relation(f"{parent_relation.name}_Child1", [violation_attribute] + parent_relation.primary_key)
+    child_relation_1.add_primary_key(parent_relation.primary_key)  # Keep parent's primary key as primary key
+    child_relation_1.add_foreign_key(parent_relation.primary_key)  # Foreign key is parent's primary key
 
-    # Create child relation 2 with remaining attributes without the violation attribute
+    # Create child relation 2 with remaining attributes and the parent's primary key
     remaining_attributes = [attr for attr in parent_relation.attributes if attr != violation_attribute]
-    child_relation_2 = Relation(remaining_attributes)
+    child_relation_2 = Relation(f"{parent_relation.name}_Child2", remaining_attributes + parent_relation.primary_key)
     child_relation_2.add_primary_key(parent_relation.primary_key)
 
     # Remove the violation attribute from the parent relation
@@ -82,15 +89,22 @@ def decomposeRelation(parent_relation, violation_attribute):
 def inputRelation():
     name = input("Enter relation name: ")
     attributes = input("Enter attributes (comma-separated): ").split(",")
-    primary_key = input("Enter primary key (comma-separated, default 'id'): ").split(",")
+    primary_key = input("Enter primary key (comma-separated, default 'id'): ").split(
+        ","
+    )
     foreign_keys = input("Enter foreign keys (comma-separated, if any): ").split(",")
-    candidate_keys = input("Enter candidate keys (comma-separated, if any): ").split(",")
+    candidate_keys = input("Enter candidate keys (comma-separated, if any): ").split(
+        ","
+    )
 
-    relation = Relation(attributes)
-    relation.add_primary_key(primary_key if primary_key != [''] else ['id'])
-    if foreign_keys != ['']:
+    # Pass the name and attributes to the Relation constructor
+    relation = Relation(name, attributes)
+
+    # Add keys
+    relation.add_primary_key(primary_key if primary_key != [""] else ["id"])
+    if foreign_keys != [""]:
         relation.add_foreign_key(foreign_keys)
-    if candidate_keys != ['']:
+    if candidate_keys != [""]:
         relation.add_candidate_key(candidate_keys)
 
     return relation
@@ -98,15 +112,21 @@ def inputRelation():
 
 # Input Functional Dependency
 def inputFunctionalDependency(relation):
-    lhs = input("Enter functional dependency left-hand side (comma-separated): ").split(",")
-    rhs = input("Enter functional dependency right-hand side (comma-separated): ").split(",")
+    lhs = input("Enter functional dependency left-hand side (comma-separated): ").split(
+        ","
+    )
+    rhs = input(
+        "Enter functional dependency right-hand side (comma-separated): "
+    ).split(",")
     relation.add_functional_dependency(lhs, rhs)
 
 
 # Input Data for Relation (Optional)
 def inputData(relation):
     print(f"Enter data for the relation: {relation.attributes}")
-    data = input(f"Enter values for {', '.join(relation.attributes)} (comma-separated): ").split(",")
+    data = input(
+        f"Enter values for {', '.join(relation.attributes)} (comma-separated): "
+    ).split(",")
     # Storing data can be added later, this step is for user input simulation
 
 
@@ -117,6 +137,8 @@ def printRelation(relation):
     print("Primary Key:", relation.primary_key)
     print("Foreign Keys:", relation.foreign_keys)
     print("Candidate Keys:", relation.candidate_keys)
-    print("Functional Dependencies:")
-    for fd in relation.functional_dependencies:
-        print(f"  {fd}")
+
+    if relation.functional_dependencies:
+        print("Functional Dependencies:")
+        for fd in relation.functional_dependencies:
+            print(f"  {fd}")
