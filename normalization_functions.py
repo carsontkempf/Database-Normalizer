@@ -107,15 +107,11 @@ def inputRelation():
     if use_default_pk == "yes":
         primary_key = [f"{name}_id"]
     else:
-        primary_key = parse_keys(
-            input("Enter primary key: ")
-        )
+        primary_key = parse_keys(input("Enter primary key: "))
 
     # Foreign and candidate keys input
     foreign_keys = parse_keys(input("Enter foreign keys (comma-separated, if any): "))
-    candidate_keys = parse_keys(
-        input("Enter candidate keys (if any): ")
-    )
+    candidate_keys = parse_keys(input("Enter candidate keys (if any): "))
 
     # Create the relation and return
     relation = Relation(name, attributes)
@@ -179,5 +175,5 @@ def printRelation(relation):
             print(f"  {fd}")
 
 
-def print_description(description):
+def print_spaced(description):
     print(f"\n{description}\n")

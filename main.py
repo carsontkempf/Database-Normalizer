@@ -4,51 +4,53 @@ from normalization_functions import (
     decomposeRelation,
     printRelation,
     inputFunctionalDependency,
-    print_description,
+    print_spaced,
 )
 
 
 def main():
-    print_description("Program Start")
+    print_spaced("Start Normalization...")
 
-    # Get user input for the relation
+    # User inputs their relation to be normalized
     relation = inputRelation()
 
-    print_description("Enter functional dependencies (if any):")
+    print_spaced("Enter functional dependencies (if any):")
+
+    # User inputs ALL functional dependencies for their relation
     more_fds = input("Add functional dependencies? (yes/no): ").lower()
     while more_fds == "yes":
         inputFunctionalDependency(relation)
         more_fds = input("Add more functional dependencies? (yes/no): ").lower()
 
-    print_description("Print initial relation")
-    print("Initial Relation:")
+    # Outputs initial relation
+    print_spaced("Initial Relation:")
     printRelation(relation)
 
-    # List to store all relations
-    all_relations = [relation]
+    # Initialize the final relation list
+    all_relations = []
 
-    print_description("Check 1NF")
+    # Normalizing to 1NF
+    print_spaced("Check 1NF")
+
     violation_attributes_1NF = is_1NF(relation)
     if violation_attributes_1NF:
-        print(f"1NF Violation detected in attributes: {violation_attributes_1NF}")
 
-        # Decompose for each violating attribute and update the parent relation
+        print_spaced(f"1NF Violation detected in attributes: {violation_attributes_1NF}")
+
         for attr in violation_attributes_1NF:
             child_relation, relation = decomposeRelation(relation, attr)
             all_relations.append(child_relation)
 
-        # Append the final updated parent relation
         all_relations.append(relation)
 
     else:
         print("No 1NF violation detected.")
 
-    # Print only the first 3 relations: 2 child relations and the final parent relation
-    print_description("Print all normalized relations")
-    for i, rel in enumerate(
-        all_relations[:3], 1
-    ):  # Ensure only 3 relations are printed
-        print(f"\nRelation {i}:")
+    # Print all remaining relations after normalization
+    print_spaced("Print all normalized relations")
+
+    for i, rel in enumerate(all_relations, 1):
+        print_spaced(f"\nRelation {i}:")
         printRelation(rel)
 
 
