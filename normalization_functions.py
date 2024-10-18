@@ -1,5 +1,6 @@
 from classes import Relation, FunctionalDependency
 
+relation_counter = 1
 
 # Normalization Functions
 
@@ -68,43 +69,60 @@ def is_5NF(relation):
 
 
 # Decompose Relation
+# Decompose function updated to ensure correct decomposition flow
 def decomposeRelation(parent_relation, violation_attribute):
-    # Create child relation 1 with violation attribute and parent's primary key
-    child_relation_1 = Relation(f"{parent_relation.name}_Child1", [violation_attribute] + parent_relation.primary_key)
-    child_relation_1.add_primary_key(parent_relation.primary_key)  # Keep parent's primary key as primary key
-    child_relation_1.add_foreign_key(parent_relation.primary_key)  # Foreign key is parent's primary key
+    global relation_counter
 
-    # Create child relation 2 with remaining attributes and the parent's primary key
-    remaining_attributes = [attr for attr in parent_relation.attributes if attr != violation_attribute]
-    child_relation_2 = Relation(f"{parent_relation.name}_Child2", remaining_attributes + parent_relation.primary_key)
-    child_relation_2.add_primary_key(parent_relation.primary_key)
+    # Create dynamic primary key format for child relations
+    child_1_primary_key = f"R{relation_counter}_id"
 
-    # Remove the violation attribute from the parent relation
+    # Create child relation for the violating attribute
+    child_relation = Relation(
+        f"R{relation_counter}", [violation_attribute, child_1_primary_key]
+    )
+    relation_counter += 1
+    child_relation.add_primary_key(child_1_primary_key)
+    child_relation.add_foreign_key(parent_relation.primary_key)
+
+    # Remove the violating attribute from the parent relation
     parent_relation.attributes.remove(violation_attribute)
 
-    return child_relation_1, child_relation_2
+    # Return the new child relation and the updated parent relation
+    return child_relation, parent_relation
 
 
 # Input Relation
 def inputRelation():
     name = input("Enter relation name: ")
     attributes = input("Enter attributes (comma-separated): ").split(",")
-    primary_key = input("Enter primary key (comma-separated, default 'id'): ").split(
-        ","
-    )
-    foreign_keys = input("Enter foreign keys (comma-separated, if any): ").split(",")
-    candidate_keys = input("Enter candidate keys (comma-separated, if any): ").split(
-        ","
+
+    # Example for entering composite and single keys
+    print("\nExample for entering keys:")
+    print("For a composite key: (ssn, address)")
+    print("For a single key: ssn")
+    print("For multiple keys: (ssn, address), ssn")
+    print()
+    # Ask for primary key
+    use_default_pk = input("Use default primary key (yes/no)? ").lower()
+    if use_default_pk == "yes":
+        primary_key = [f"{name}_id"]
+    else:
+        primary_key = parse_keys(
+            input("Enter primary key: ")
+        )
+
+    # Foreign and candidate keys input
+    foreign_keys = parse_keys(input("Enter foreign keys (comma-separated, if any): "))
+    candidate_keys = parse_keys(
+        input("Enter candidate keys (if any): ")
     )
 
-    # Pass the name and attributes to the Relation constructor
+    # Create the relation and return
     relation = Relation(name, attributes)
-
-    # Add keys
-    relation.add_primary_key(primary_key if primary_key != [""] else ["id"])
-    if foreign_keys != [""]:
+    relation.add_primary_key(primary_key)
+    if foreign_keys:
         relation.add_foreign_key(foreign_keys)
-    if candidate_keys != [""]:
+    if candidate_keys:
         relation.add_candidate_key(candidate_keys)
 
     return relation
@@ -130,6 +148,23 @@ def inputData(relation):
     # Storing data can be added later, this step is for user input simulation
 
 
+def parse_keys(key_input):
+    key_input = key_input.strip()
+    if not key_input:
+        return []
+
+    keys = []
+    composite_keys = key_input.split("),")
+    for composite in composite_keys:
+        composite = composite.replace("(", "").replace(")", "").strip()
+        key_parts = [part.strip() for part in composite.split(",")]
+        if len(key_parts) == 1:
+            keys.append(key_parts[0])
+        else:
+            keys.append(key_parts)
+    return keys
+
+
 # Print Relation
 def printRelation(relation):
     print(f"Relation Name: {relation.name}")
@@ -142,3 +177,7 @@ def printRelation(relation):
         print("Functional Dependencies:")
         for fd in relation.functional_dependencies:
             print(f"  {fd}")
+
+
+def print_description(description):
+    print(f"\n{description}\n")
