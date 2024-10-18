@@ -19,11 +19,34 @@ def is_1NF(relation):
 
 # 2NF: Detect if there are partial functional dependencies
 def is_2NF(relation):
-    partial_dependencies = []
-    for fd in relation.functional_dependencies:
-        if any(pk not in fd.get_x() for pk in relation.primary_key):
-            partial_dependencies.append(fd)
-    return partial_dependencies
+    # Only check 2NF if there is a composite primary key (more than one attribute in the primary key)
+    if len(relation.primary_key) > 1:
+        violating_attributes = []
+        partial_fds = []  # Store functional dependencies that are partial
+
+        for fd in relation.functional_dependencies:
+            lhs, rhs = fd.get_x(), fd.get_y()
+
+            # Check if the left-hand side (LHS) is part of the composite primary key
+            # but not the whole primary key (prime attribute not a superkey)
+            if set(lhs).issubset(set(relation.primary_key)) and set(lhs) != set(
+                relation.primary_key
+            ):
+                partial_fds.append(fd)
+
+        # Now, process the collected partial functional dependencies
+        for fd in partial_fds:
+            lhs, rhs = fd.get_x(), fd.get_y()
+
+            # Check if rhs contains non-prime attributes (not part of the primary key)
+            for attribute in rhs:
+                if attribute not in relation.primary_key:
+                    violating_attributes.append(attribute)
+
+        # Return violating attributes if any are found
+        return violating_attributes if violating_attributes else None
+
+    return None
 
 
 # 3NF: Detect if there are any transitive functional dependencies
