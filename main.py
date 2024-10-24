@@ -4,44 +4,43 @@ from classes import *
 
 def normalize_relation(relation, choice):
     if choice == "1NF":
-
-        anomalies = detect_1NF_anomalies(relation)
-
-        list_of_1NF_relations = decompose(relation, anomalies)
-
-        print_relation(list_of_1NF_relations)
-
+        anomalies = detect_1NF_anomalies(relation)  # Detect Anomalies
+        if anomalies:  # Create New Relations for each Anomaly
+            list_of_1NF_relations = decompose(relation, anomalies)
+            print_relation(list_of_1NF_relations)  # Print Relations in 1NF
+        else:
+            print_relation(relation)
     elif choice == "2NF":
-        # Placeholder: Get Functional Dependencies as input
-        # Placeholder: Detect 2NF violations
-        # Placeholder: Decompose relation if any violations are found
         normalize_relation(relation, "1NF")
+        # anomalies = detect_2NF_anomalies(relation)
+        # list_of_2NF_relations = decompose(relation, anomalies)
+        # print_relation(list_of_2NF_relations)
     elif choice == "3NF":
-        # Placeholder: Detect 3NF violations
-        # Placeholder: Decompose relation if any violations are found
         normalize_relation(relation, "2NF")
+        # anomalies = detect_3NF_anomalies(relation)
+        # list_of_3NF_relations = decompose(relation, anomalies)
+        # print_relation(list_of_3NF_relations)
     elif choice == "BCNF":
-        # Placeholder: Detect BCNF violations
-        # Placeholder: Decompose relation if any violations are found
         normalize_relation(relation, "3NF")
+        # anomalies = detect_BCNF_anomalies(relation)
+        # list_of_BCNF_relations = decompose(relation, anomalies)
+        # print_relation(list_of_BCNF_relations)
     elif choice == "4NF":
-        # Placeholder: Get data instances as input
-        # Placeholder: Detect 4NF violations
-        # Placeholder: Decompose relation if any violations are found
         normalize_relation(relation, "BCNF")
+        # anomalies = detect_4NF_anomalies(relation)
+        # list_of_4NF_relations = decompose(relation, anomalies)
+        # print_relation(list_of_4NF_relations)
     elif choice == "5NF":
-        # Placeholder: Detect 5NF violations
-        # Placeholder: Decompose relation if any violations are found
         normalize_relation(relation, "4NF")
+        # anomalies = detect_5NF_anomalies(relation)
+        # list_of_5NF_relations = decompose(relation, anomalies)
+        # print_relation(list_of_5NF_relations)
     else:
         print("Invalid choice")
-
         normalization_choice = input(
             "Select the Normalization Form (1NF, 2NF, 3NF, BCNF, 4NF, 5NF): "
         ).upper()
-
         relation_object = input_relation()
-
         normalize_relation(relation_object, normalization_choice)
 
 
