@@ -2,7 +2,9 @@ from classes import *
 
 
 # --------------------------------- Normalization Functions ---------------------------------
-def add_relation(name, attributes, primary_key=None, candidate_keys=None, foreign_keys=None):
+def add_relation(
+    name, attributes, primary_key=None, candidate_keys=None, foreign_keys=None
+):
     # Create the Relation object
     relation = Relation(name, attributes)
 
@@ -45,7 +47,9 @@ def detect_1NF_anomalies(relation):
     # Iterate over each attribute in the relation
     for attribute in relation.attributes:
         # Ask the user if the attribute is atomic
-        is_atomic = input(f"Is the attribute '{attribute}' atomic? (yes/no): ").strip().lower()
+        is_atomic = (
+            input(f"Is the attribute '{attribute}' atomic? (yes/no): ").strip().lower()
+        )
 
         # If the attribute is non-atomic (user says 'no'), add it to the anomalies list
         if is_atomic == "no":
@@ -64,14 +68,16 @@ def decompose(relation, anomalies):
         new_relation_name = f"R{relation_counter}"
 
         # New relation should have the anomaly attributes plus the parent's primary key
-        new_relation_attributes = relation.primary_key + (anomaly if isinstance(anomaly, list) else [anomaly])
+        new_relation_attributes = relation.primary_key + (
+            anomaly if isinstance(anomaly, list) else [anomaly]
+        )
 
         # Add the primary key (same as parent's) and foreign key (also same as parent's)
         new_relation = add_relation(
             name=new_relation_name,
             attributes=new_relation_attributes,
             primary_key=relation.primary_key,
-            foreign_keys=[relation.primary_key]
+            foreign_keys=[relation.primary_key],
         )
 
         # Add the new relation to the list
@@ -87,7 +93,7 @@ def decompose(relation, anomalies):
         name=relation.name,
         attributes=relation.attributes,
         primary_key=relation.primary_key,
-        foreign_keys=relation.foreign_keys
+        foreign_keys=relation.foreign_keys,
     )
 
     # Add the remaining relation to the list
@@ -102,20 +108,24 @@ def input_relation():
     name = input("Enter the name of the relation: ").strip()
 
     # Get attributes from the user
-    attributes = input("Enter attributes (comma-separated): ").split(',')
+    attributes = input("Enter attributes (comma-separated): ").split(",")
     attributes = [attr.strip() for attr in attributes]
 
     # Ask for the primary key or use a default if none is provided
-    primary_key_input = input("Enter primary key (comma-separated if composite), or press Enter for default: ").strip()
+    primary_key_input = input(
+        "Enter primary key (comma-separated if composite), or press Enter for default: "
+    ).strip()
     if not primary_key_input:
         # If no input, use a default primary key based on the relation name (e.g., 'relation_name_id')
         primary_key = [f"{name}_id"]
         print(f"Default primary key '{primary_key[0]}' will be used.")
         # Ensure that the primary key exists in attributes
         if primary_key[0] not in attributes:
-            attributes.append(primary_key[0])  # Add the default primary key to attributes if missing
+            attributes.append(
+                primary_key[0]
+            )  # Add the default primary key to attributes if missing
     else:
-        primary_key = [key.strip() for key in primary_key_input.split(',')]
+        primary_key = [key.strip() for key in primary_key_input.split(",")]
 
     # Ensure primary key is part of the relation attributes
     if not set(primary_key).issubset(attributes):
@@ -123,17 +133,21 @@ def input_relation():
 
     # Ask for candidate keys (optional)
     candidate_keys_input = input(
-        "Enter candidate key(s) (comma-separated for each key, semicolon-separated for multiple keys): ").strip()
+        "Enter candidate key(s) (comma-separated for each key, semicolon-separated for multiple keys): "
+    ).strip()
     candidate_keys = None
     if candidate_keys_input:
-        candidate_keys = [key.strip().split(',') for key in candidate_keys_input.split(';')]
+        candidate_keys = [
+            key.strip().split(",") for key in candidate_keys_input.split(";")
+        ]
 
     # Ask for foreign keys (optional)
     foreign_keys_input = input(
-        "Enter foreign key(s) (comma-separated for each key, semicolon-separated for multiple keys): ").strip()
+        "Enter foreign key(s) (comma-separated for each key, semicolon-separated for multiple keys): "
+    ).strip()
     foreign_keys = None
     if foreign_keys_input:
-        foreign_keys = [key.strip().split(',') for key in foreign_keys_input.split(';')]
+        foreign_keys = [key.strip().split(",") for key in foreign_keys_input.split(";")]
 
     # Use the add_relation function to create the Relation object
     relation_object = add_relation(
@@ -141,24 +155,35 @@ def input_relation():
         attributes=attributes,
         primary_key=primary_key,
         candidate_keys=candidate_keys,
-        foreign_keys=foreign_keys
+        foreign_keys=foreign_keys,
     )
 
     return relation_object
 
 
 def add_functional_dependency(relation):
-    X = input("Enter the determinant attributes (X) (comma-separated): ").split(',')
-    Y = input("Enter the dependent attributes (Y) (comma-separated): ").split(',')
+    X = input("Enter the determinant attributes (X) (comma-separated): ").split(",")
+    Y = input("Enter the dependent attributes (Y) (comma-separated): ").split(",")
     relation.add_functional_dependency([x.strip() for x in X], [y.strip() for y in Y])
 
 
 def add_data(relation):
-    data = input(f"Enter tuple values (comma-separated for {relation.attributes}): ").split(',')
-    relation.add_tuple([value.strip() for value in data])
+    while True:
+        data = input(
+            f"Enter tuple values (comma-separated for {relation.attributes}): "
+        ).split(",")
+        relation.add_tuple([value.strip() for value in data])
+
+        # Ask if the user wants to add another data tuple
+        more_input = (
+            input("Do you want to add another data tuple? (yes/no): ").strip().lower()
+        )
+        if more_input == "no":
+            break
 
 
 # --------------------------------- Print Functions ---------------------------------
+
 
 def print_relation(relations):
     for index, relation in enumerate(relations, start=1):
