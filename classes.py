@@ -43,6 +43,12 @@ class Relation:
     def add_functional_dependency(self, X, Y):
         self.functional_dependencies.append(FunctionalDependency(X, Y))
 
+    def add_tuple(self, data_instance):
+        if len(data_instance) != len(self.attributes):
+            raise ValueError(f"Expected {len(self.attributes)} attributes, got {len(data_instance)}.")
+
+        self.data.append(data_instance)
+
     def __repr__(self):
         return (
             f"Relation(Name: {self.name}, Attributes: {self.attributes}, "
