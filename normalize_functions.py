@@ -92,7 +92,7 @@ def normalize_1NF(relation):
 
 
 def normalize_2NF(relation):
-    relations = normalize_1NF(relation)
+    normalize_1NF(relation)
     anomalies = detect_2NF_anomalies(relation)
     if anomalies:
         list_of_2NF_relations = decompose_relation(relation, [anomalies])
