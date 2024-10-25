@@ -5,15 +5,20 @@ from helper_functions import *
 def decompose_relation(relation, anomaly_list):
     # Initialize a list to hold decomposed Relation objects
     decomposed_relations = []
+
+    # Initialize a counter for naming the decomposed relations
     count = 1
+
+    # Initialize a list of all attributes from the inputted relation
     remaining_attributes = relation.attributes[:]
 
+    # Loop through each anomaly in the anomaly_list
     for anomaly in anomaly_list:
         # Initialize a new decomposed Relation object with a count-based name
         decomposed_relation = Relation(name=str(count), attributes=[])
 
         if "|" not in anomaly:
-            # The anomaly isn't nested
+            # The anomaly is not nested, so add it directly
             decomposed_relation.attributes.append(anomaly)
             remaining_attributes.remove(anomaly)
         else:
@@ -21,55 +26,55 @@ def decompose_relation(relation, anomaly_list):
             attribute_string = ""
             for character in anomaly:
                 if character == "|":
+                    # Append completed attribute string to decomposed relation and remove from remaining attributes
                     decomposed_relation.attributes.append(attribute_string)
-                    remaining_attributes.remove(attribute_string)
+                    if attribute_string in remaining_attributes:
+                        remaining_attributes.remove(attribute_string)
                     attribute_string = ""
                 else:
-                    # Build up the attribute string character by character
                     attribute_string += character
 
             # Append the final attribute_string to decomposed attributes (if any)
             if attribute_string:
                 decomposed_relation.attributes.append(attribute_string)
-                remaining_attributes.remove(attribute_string)
+                if attribute_string in remaining_attributes:
+                    remaining_attributes.remove(attribute_string)
 
-        # Append the parent relation's keys
+        for pk in relation.primary_key:
+            if pk not in decomposed_relation.attributes:
+                decomposed_relation.attributes.append(pk)
+
+        # Append the parent relation's keys to the decomposed relation
         decomposed_relation.primary_key.extend(relation.primary_key)
-        decomposed_relation.foreign_keys.extend([relation.primary_key])
+        decomposed_relation.foreign_keys.extend(relation.foreign_keys)
         decomposed_relation.candidate_keys.extend(relation.candidate_keys)
-        decomposed_relation.attributes.append(relation.primary_key)
+        decomposed_relation.functional_dependencies.extend(
+            relation.functional_dependencies
+        )
 
         # Add the newly created decomposed relation to the list
         decomposed_relations.append(decomposed_relation)
 
+        # Increment the count for naming the next relation
         count += 1
 
-        # Filter out any attributes already included in existing decomposed relations
-        remaining_attributes = [
-            attr
-            for attr in remaining_attributes
-            if all(attr not in relation.attributes for relation in decomposed_relations)
-        ]
+    # If there are remaining attributes, create an additional decomposed relation
+    if remaining_attributes:
+        remaining_relation = Relation(name=str(count), attributes=remaining_attributes)
 
-        # If there are truly remaining attributes, create an additional decomposed relation
-        if remaining_attributes:
-            remaining_relation = Relation(
-                name=str(count), attributes=remaining_attributes
-            )
+        # Add the parent relation's primary key, foreign keys, candidate keys, and functional dependencies
+        remaining_relation.primary_key.extend(relation.primary_key)
+        remaining_relation.foreign_keys.extend(relation.foreign_keys)
+        remaining_relation.candidate_keys.extend(relation.candidate_keys)
+        remaining_relation.functional_dependencies.extend(
+            relation.functional_dependencies
+        )
 
-            # Add the parent relation's primary key, foreign keys, candidate keys, and functional dependencies
-            remaining_relation.primary_key.extend(relation.primary_key)
-            remaining_relation.foreign_keys.extend(relation.foreign_keys)
-            remaining_relation.candidate_keys.extend(relation.candidate_keys)
-            remaining_relation.functional_dependencies.extend(
-                relation.functional_dependencies
-            )
+        # Append the remaining relation to the decomposed relations list
+        decomposed_relations.append(remaining_relation)
 
-            # Append the remaining relation to the decomposed relations list
-            decomposed_relations.append(remaining_relation)
-
-        # Return the list of decomposed Relation objects
-        return decomposed_relations
+    # Return the list of decomposed Relation objects
+    return decomposed_relations
 
 
 def normalize_1NF(relation):
