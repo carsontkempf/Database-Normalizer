@@ -28,6 +28,7 @@ def decompose_relation(parent_relation, anomaly_list):
 
     for anomaly in anomaly_list:
         decomposed_relation = Relation(name=str(count), attributes=[])
+        decomposed_relation.name = count
 
         # Handle non-nested anomalies directly
         if "|" not in anomaly:
@@ -52,12 +53,20 @@ def decompose_relation(parent_relation, anomaly_list):
         decomposed_relation.foreign_keys = parent_relation.foreign_keys[:]
         decomposed_relation.candidate_keys = parent_relation.candidate_keys[:]
 
-        # Handle functional dependencies
+        # Update functional dependencies for partial dependencies
+        adjusted_fds = []
         for fd in parent_relation.functional_dependencies:
             if set(fd.get_y()).intersection(decomposed_relation.attributes):
-                decomposed_relation.functional_dependencies.append(
-                    FunctionalDependency(parent_relation.primary_key, fd.get_y())
-                )
+                if set(fd.get_x()) != set(parent_relation.primary_key):
+                    # Adjust the FD to use primary key as X if partial dependency
+                    fd.adjust_to_primary_key(parent_relation.primary_key)
+                # Append adjusted or unmodified FD after ensuring correctness
+                adjusted_fds.append(fd)
+
+        # After all FDs are adjusted, assign to the relation and output
+        decomposed_relation.functional_dependencies = adjusted_fds
+        print(f"Adding new relation: {decomposed_relation.attributes}")
+        decomposed_relation_list.append(decomposed_relation)
 
         # Check for duplicates or subsets
         new_attrs = set(decomposed_relation.attributes)
@@ -91,6 +100,7 @@ def decompose_relation(parent_relation, anomaly_list):
     # Ensure all remaining attributes are accounted for
     if all_parent_attributes:
         remaining_relation = Relation(name=str(count), attributes=all_parent_attributes)
+        remaining_relation.name = count
         remaining_relation.primary_key = parent_relation.primary_key[:]
         remaining_relation.foreign_keys = parent_relation.foreign_keys[:]
         remaining_relation.candidate_keys = parent_relation.candidate_keys[:]
@@ -130,6 +140,9 @@ def decompose_relation(parent_relation, anomaly_list):
 def normalize_1NF(relation):
     print_normalization_stage("1NF Normalization")
     anomalies = detect_1NF_anomalies(relation)
+
+    print_normalization_stage("Final 1NF Relations")
+
     if anomalies:
         list_of_1NF_relations = decompose_relation(relation, anomalies)
         for decomposed_relation in list_of_1NF_relations:
@@ -152,6 +165,13 @@ def normalize_2NF(relation):
             final_2NF_relations.extend(list_of_2NF_relations)
         else:
             final_2NF_relations.append(rel)
+
+    print_normalization_stage("Final 2NF Relations")
+    # Ensure each final relation is printed once with unique identifiers
+    for index, final_relation in enumerate(final_2NF_relations, start=1):
+        final_relation.name = index
+        final_relation.print_relation()  # Print each relation
+
     return final_2NF_relations
 
 

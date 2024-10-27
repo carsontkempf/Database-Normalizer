@@ -3,6 +3,9 @@ class FunctionalDependency:
         self.X = X if isinstance(X, list) else [X]
         self.Y = Y if isinstance(Y, list) else [Y]
 
+    def adjust_to_primary_key(self, primary_key):
+        self.X = primary_key
+
     def get_x(self):
         return self.X
 
