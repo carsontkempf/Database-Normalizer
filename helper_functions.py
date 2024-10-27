@@ -115,11 +115,11 @@ def input_data(relation):
 # --------------------------------- Print Functions ---------------------------------
 
 
-def print_relation_list(relations):
-    if not relations:
-        print("No relations to display.")
-        return
+def print_divider():
+    print("\n-------------------------\n")
 
-    for index, relation in enumerate(relations, start=1):
-        print(f"\n--- Relation {index} ---")
-        relation.print_relation()
+
+def print_normalization_stage(stage_name):
+    print_divider()
+    print(f"Starting {stage_name}")
+    print_divider()
