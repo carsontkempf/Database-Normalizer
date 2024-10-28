@@ -12,13 +12,101 @@ def print_normalization_stage(stage_name):
     print_divider()
 
 
+def fix_partial_functional_dependencies(parent_relation, decomposed_relation):
+    adjusted_fds = []
+    for fd in parent_relation.functional_dependencies:
+        fd_x = set(fd.get_x())
+        fd_y = set(fd.get_y())
+
+        # Check if both X and Y attributes are present in the decomposed relation
+        if fd_x.issubset(decomposed_relation.attributes) and fd_y.issubset(
+            decomposed_relation.attributes
+        ):
+            # Adjust the FD to use primary key if partial dependency
+            if fd_x != set(parent_relation.primary_key):
+                fd.adjust_to_primary_key(parent_relation.primary_key)
+
+            # Append adjusted or unmodified FD after ensuring correctness
+            adjusted_fds.append(fd)
+
+    return adjusted_fds
+
+
+def fix_transitive_functional_dependencies(relation):
+    primary_key = relation.primary_key[:]
+    transitive_deps = {}
+    new_fds = []
+
+    # Step 1: Identify transitive dependencies
+    for fd in relation.functional_dependencies:
+        X = fd.get_x()
+        Y = fd.get_y()
+
+        # If X is not a superkey but is still part of a transitive dependency
+        if not set(X).issubset(primary_key):
+            # Track each non-key attribute dependency as a transitive dependency
+            for y in Y:
+                if y not in primary_key:
+                    transitive_deps.setdefault(tuple(primary_key), set()).add(y)
+        else:
+            # If it's a direct dependency on the primary key, keep it in the new list
+            new_fds.append(fd)
+
+    # Step 2: Replace transitive dependencies with primary_key -> all transitive dependents
+    for pk, dependent_attrs in transitive_deps.items():
+        # Add a new consolidated FD for primary key -> (all transitive dependent attributes)
+        consolidated_fd = FunctionalDependency(list(pk), list(dependent_attrs))
+        new_fds.append(consolidated_fd)
+        print(
+            f"Replacing transitive dependencies with consolidated FD: {list(pk)} -> {list(dependent_attrs)}"
+        )
+
+    return new_fds
+
+
+def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
+    new_attrs = set(decomposed_relation.attributes)
+    to_remove = []
+
+    for existing_relation in decomposed_relation_list:
+        existing_attrs = set(existing_relation.attributes)
+
+        if new_attrs == existing_attrs:
+            print(
+                f"Skipping exact duplicate relation: {decomposed_relation.attributes}"
+            )
+            return decomposed_relation_list  # Skip adding duplicate
+        elif existing_attrs.issubset(new_attrs):
+            print(
+                f"Removing subset relation: {existing_relation.attributes} in favor of {decomposed_relation.attributes}"
+            )
+            to_remove.append(existing_relation)  # Mark subset for removal
+        elif new_attrs.issubset(existing_attrs):
+            print(
+                f"Skipping subset relation: {decomposed_relation.attributes} since {existing_relation.attributes} already exists"
+            )
+            return decomposed_relation_list  # Skip adding subset
+
+    # Remove marked subset relations
+    for relation in to_remove:
+        decomposed_relation_list.remove(relation)
+
+    # Add the new relation after checking duplicates
+    decomposed_relation_list.append(decomposed_relation)
+    print(f"Adding new relation: {decomposed_relation.attributes}")
+
+    return decomposed_relation_list
+
+
 # Input: relation object, a list of anomalies
 # anomaly_list = ['abc', 'def|ghi', 'jkl']
 # Output: list of relation objects
 # Main decomposition function for detected anomalies
 def decompose_relation(parent_relation, anomaly_list):
     if not anomaly_list:
-        return [parent_relation]  # No anomalies, return parent relation
+        return (
+            []
+        )  # No anomalies, so return an empty list to prevent adding the original relation
 
     decomposed_relation_list = []
     count = 1
@@ -26,9 +114,10 @@ def decompose_relation(parent_relation, anomaly_list):
 
     print("\nStarting decomposition for anomalies...\n")
 
+    # Process each anomaly to create new relations
     for anomaly in anomaly_list:
         decomposed_relation = Relation(name=str(count), attributes=[])
-        decomposed_relation.name = count
+        decomposed_relation.name = f"Relation_{count}"  # Use unique name format
 
         # Handle non-nested anomalies directly
         if "|" not in anomaly:
@@ -43,7 +132,7 @@ def decompose_relation(parent_relation, anomaly_list):
                     all_parent_attributes.remove(attr)
                 decomposed_relation.attributes.append(attr)
 
-        # Include primary keys
+        # Ensure primary key is included in the decomposed relation
         for pk in parent_relation.primary_key:
             if pk not in decomposed_relation.attributes:
                 decomposed_relation.attributes.append(pk)
@@ -53,102 +142,50 @@ def decompose_relation(parent_relation, anomaly_list):
         decomposed_relation.foreign_keys = parent_relation.foreign_keys[:]
         decomposed_relation.candidate_keys = parent_relation.candidate_keys[:]
 
-        # Update functional dependencies, only if both X and Y attributes exist in the decomposed relation
-        adjusted_fds = []
-        for fd in parent_relation.functional_dependencies:
-            fd_x = set(fd.get_x())
-            fd_y = set(fd.get_y())
-            if fd_x.issubset(decomposed_relation.attributes) and fd_y.issubset(
-                decomposed_relation.attributes
-            ):
-                if fd_x != set(parent_relation.primary_key):
-                    # Adjust the FD to use primary key as X if partial dependency
-                    fd.adjust_to_primary_key(parent_relation.primary_key)
-                # Append adjusted or unmodified FD after ensuring correctness
-                adjusted_fds.append(fd)
+        # Adjust functional dependencies
+        decomposed_relation.functional_dependencies = (
+            fix_partial_functional_dependencies(parent_relation, decomposed_relation)
+        )
 
-        # After all FDs are adjusted, assign to the relation and output
-        decomposed_relation.functional_dependencies = adjusted_fds
-        print(f"Adding new relation: {decomposed_relation.attributes}")
-        decomposed_relation_list.append(decomposed_relation)
+        # Detect and fix transitive dependencies
+        decomposed_relation.functional_dependencies = (
+            fix_transitive_functional_dependencies(decomposed_relation)
+        )
 
-        # Check for duplicates or subsets
-        new_attrs = set(decomposed_relation.attributes)
-        to_remove = []
-
-        for existing_relation in decomposed_relation_list:
-            existing_attrs = set(existing_relation.attributes)
-            if new_attrs == existing_attrs:
-                print(
-                    f"Skipping exact duplicate relation: {decomposed_relation.attributes}"
-                )
-                break
-            elif existing_attrs.issubset(new_attrs):
-                print(
-                    f"Removing subset relation: {existing_relation.attributes} in favor of {decomposed_relation.attributes}"
-                )
-                to_remove.append(existing_relation)
-            elif new_attrs.issubset(existing_attrs):
-                print(
-                    f"Skipping subset relation: {decomposed_relation.attributes} since {existing_relation.attributes} already exists"
-                )
-                break
-        else:
-            for relation in to_remove:
-                decomposed_relation_list.remove(relation)
-            print(f"Adding new relation: {decomposed_relation.attributes}")
-            decomposed_relation_list.append(decomposed_relation)
+        # Add newly created relation to list
+        decomposed_relation_list = exclude_duplicate_relations(
+            decomposed_relation, decomposed_relation_list
+        )
 
         count += 1
 
-    # Ensure all remaining attributes are accounted for
+    # Add remaining attributes as a new relation if not empty
     if all_parent_attributes:
         remaining_relation = Relation(name=str(count), attributes=all_parent_attributes)
-        remaining_relation.name = count
+        remaining_relation.name = f"Relation_{count}"  # Ensure a unique name
+
+        # Ensure primary key is added to remaining relation
+        for pk in parent_relation.primary_key:
+            if pk not in remaining_relation.attributes:
+                remaining_relation.attributes.append(pk)
+
         remaining_relation.primary_key = parent_relation.primary_key[:]
         remaining_relation.foreign_keys = parent_relation.foreign_keys[:]
         remaining_relation.candidate_keys = parent_relation.candidate_keys[:]
+
+        # Adjust functional dependencies for the remaining relation
         remaining_relation.functional_dependencies = (
-            parent_relation.functional_dependencies[:]
+            fix_partial_functional_dependencies(parent_relation, remaining_relation)
         )
 
-        # Only add functional dependencies that are fully present in remaining attributes
-        adjusted_fds = []
-        for fd in parent_relation.functional_dependencies:
-            fd_x = set(fd.get_x())
-            fd_y = set(fd.get_y())
-            if fd_x.issubset(remaining_relation.attributes) and fd_y.issubset(
-                remaining_relation.attributes
-            ):
-                adjusted_fds.append(fd)
+        # Detect and fix transitive dependencies for the remaining relation
+        remaining_relation.functional_dependencies = (
+            fix_transitive_functional_dependencies(remaining_relation)
+        )
 
-        remaining_relation.functional_dependencies = adjusted_fds
-
-        new_attrs = set(remaining_relation.attributes)
-        to_remove = []
-
-        for existing_relation in decomposed_relation_list:
-            existing_attrs = set(existing_relation.attributes)
-            if new_attrs == existing_attrs:
-                print(
-                    f"Skipping exact duplicate relation: {remaining_relation.attributes}"
-                )
-                break
-            elif existing_attrs.issubset(new_attrs):
-                print(
-                    f"Removing subset relation: {existing_relation.attributes} in favor of {remaining_relation.attributes}"
-                )
-                to_remove.append(existing_relation)
-            elif new_attrs.issubset(existing_attrs):
-                print(
-                    f"Skipping subset relation: {remaining_relation.attributes} since {existing_relation.attributes} already exists"
-                )
-                break
-        else:
-            for relation in to_remove:
-                decomposed_relation_list.remove(relation)
-            print(f"Adding new relation: {remaining_relation.attributes}")
-            decomposed_relation_list.append(remaining_relation)
+        decomposed_relation_list = exclude_duplicate_relations(
+            remaining_relation, decomposed_relation_list
+        )
 
     return decomposed_relation_list
 
@@ -194,15 +231,21 @@ def normalize_2NF(relation):
 def normalize_3NF(relation):
     print_normalization_stage("3NF Normalization")
     relations = normalize_2NF(relation)
-    anomalies = detect_3NF_anomalies(relation)
-    if anomalies:
-        list_of_3NF_relations = decompose_relation(relation, anomalies)
-        for decomposed_relation in list_of_3NF_relations:
-            decomposed_relation.print_relation()
-        return list_of_3NF_relations
-    else:
-        relation.print_relation()
-        return relations
+    final_3NF_relations = []
+
+    for rel in relations:
+        anomalies = detect_3NF_anomalies(rel)
+        if anomalies:
+            list_of_3NF_relations = decompose_relation(rel, anomalies)
+            final_3NF_relations.extend(list_of_3NF_relations)
+        else:
+            final_3NF_relations.append(rel)
+
+    print_normalization_stage("Final 3NF Relations")
+    for final_relation in final_3NF_relations:
+        final_relation.print_relation()
+
+    return final_3NF_relations
 
 
 def normalize_BCNF(relation):
@@ -272,4 +315,32 @@ def detect_2NF_anomalies(relation):
             non_key_Y = [y for y in Y if y in non_keys]
             if non_key_Y:
                 anomalies.append("|".join(non_key_Y))
+    return anomalies
+
+
+def detect_3NF_anomalies(relation):
+    anomalies = []
+    primary_key = relation.primary_key[:]
+    all_keys = primary_key[:] + relation.candidate_keys + relation.foreign_keys
+
+    # Identify non-key attributes
+    non_keys = [attr for attr in relation.attributes if attr not in all_keys]
+
+    for fd in relation.functional_dependencies:
+        X = fd.get_x()  # Determinant (left side of FD)
+        Y = fd.get_y()  # Dependent attributes (right side of FD)
+
+        # Check if X is not a superkey (does not fully determine the primary key)
+        if not set(primary_key).issubset(set(X)):
+            for y in Y:
+                # Check for transitive dependency if y is a non-key and depends on another non-key attribute
+                if y in non_keys:
+                    # Create anomaly with primary key and transitive attributes
+                    transitive_anomaly = primary_key + X + Y
+                    transitive_anomaly_str = "|".join(transitive_anomaly)
+
+                    # Add to anomalies in format "A|B|C"
+                    if transitive_anomaly_str not in anomalies:
+                        anomalies.append(transitive_anomaly_str)
+
     return anomalies
