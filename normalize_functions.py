@@ -53,11 +53,15 @@ def decompose_relation(parent_relation, anomaly_list):
         decomposed_relation.foreign_keys = parent_relation.foreign_keys[:]
         decomposed_relation.candidate_keys = parent_relation.candidate_keys[:]
 
-        # Update functional dependencies for partial dependencies
+        # Update functional dependencies, only if both X and Y attributes exist in the decomposed relation
         adjusted_fds = []
         for fd in parent_relation.functional_dependencies:
-            if set(fd.get_y()).intersection(decomposed_relation.attributes):
-                if set(fd.get_x()) != set(parent_relation.primary_key):
+            fd_x = set(fd.get_x())
+            fd_y = set(fd.get_y())
+            if fd_x.issubset(decomposed_relation.attributes) and fd_y.issubset(
+                decomposed_relation.attributes
+            ):
+                if fd_x != set(parent_relation.primary_key):
                     # Adjust the FD to use primary key as X if partial dependency
                     fd.adjust_to_primary_key(parent_relation.primary_key)
                 # Append adjusted or unmodified FD after ensuring correctness
@@ -107,6 +111,18 @@ def decompose_relation(parent_relation, anomaly_list):
         remaining_relation.functional_dependencies = (
             parent_relation.functional_dependencies[:]
         )
+
+        # Only add functional dependencies that are fully present in remaining attributes
+        adjusted_fds = []
+        for fd in parent_relation.functional_dependencies:
+            fd_x = set(fd.get_x())
+            fd_y = set(fd.get_y())
+            if fd_x.issubset(remaining_relation.attributes) and fd_y.issubset(
+                remaining_relation.attributes
+            ):
+                adjusted_fds.append(fd)
+
+        remaining_relation.functional_dependencies = adjusted_fds
 
         new_attrs = set(remaining_relation.attributes)
         to_remove = []
