@@ -1,6 +1,8 @@
 from classes import *
 from helper_functions import *
 
+# --------------------------------- Print Functions ---------------------------------
+
 
 def print_divider():
     print("\n-------------------------\n")
@@ -12,7 +14,6 @@ def print_normalization_stage(stage_name):
     print_divider()
 
 
-# Define the print_data function to display data neatly under attribute headers with dictionary access
 def print_data(relation):
     if not relation.data:
         print("No data available in relation.")
@@ -29,6 +30,9 @@ def print_data(relation):
             " | ".join(str(data_dict[attr]).ljust(15) for attr in relation.attributes)
         )
     print()
+
+
+# --------------------------------- Fix relations if they have anomalies  ---------------------------------
 
 
 def fix_partial_functional_dependencies(parent_relation, decomposed_relation):
@@ -94,24 +98,74 @@ def fix_transitive_functional_dependencies(relation):
     return new_fds
 
 
-def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
-    new_attrs = set(decomposed_relation.attributes)
-    to_remove = []
+# Fix detected MVDs by creating new relations and managing primary key uniqueness
+def fix_mvds(relation, mvds):
+    new_relations = []
+    pk = relation.primary_key
+    pk_values = set()
 
+    # Check and ensure uniqueness of primary key values
+    for data in relation.data:
+        pk_value = tuple(data[attr] for attr in pk)
+        while pk_value in pk_values:
+            print(f"Duplicate primary key value detected: {pk_value}")
+            new_pk_value = input(f"Enter a unique primary key value for {pk}: ")
+            for attr in pk:
+                data[attr] = (
+                    new_pk_value.strip()
+                )  # Update with the new unique primary key value
+            pk_value = tuple(
+                data[attr] for attr in pk
+            )  # Re-evaluate pk_value tuple after updating
+        pk_values.add(pk_value)
+
+    # Create new relations for each MVD
+    for X, Y in mvds:
+        # Define attributes for the new relation
+        attributes = X + Y
+        new_relation = Relation(
+            name=f"{relation.name}_{'_'.join(Y)}", attributes=attributes
+        )
+        new_relation.primary_key = X
+        new_relation.functional_dependencies = [FunctionalDependency(X, Y)]
+
+        # Assign data to the new relation
+        for data in relation.data:
+            new_data = {attr: data[attr] for attr in attributes}
+            new_relation.add_tuple(new_data)
+
+        new_relations.append(new_relation)
+
+    return new_relations
+
+
+def nested_to_tuple(lst):
+    return tuple(nested_to_tuple(i) if isinstance(i, list) else i for i in lst)
+
+
+def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
+    # Check if attributes of decomposed_relation are list, if so convert them to tuple
+    new_attrs = {nested_to_tuple(attr): True for attr in decomposed_relation.attributes}
+
+    to_remove = []
     for existing_relation in decomposed_relation_list:
-        existing_attrs = set(existing_relation.attributes)
+
+        # Check if attributes of existing_relation are list, if so convert them to tuple
+        existing_attrs = {
+            nested_to_tuple(attr): True for attr in existing_relation.attributes
+        }
 
         if new_attrs == existing_attrs:
             print(
                 f"Skipping exact duplicate relation: {decomposed_relation.attributes}"
             )
             return decomposed_relation_list  # Skip adding duplicate
-        elif existing_attrs.issubset(new_attrs):
+        elif all(attr in new_attrs for attr in existing_attrs):
             print(
                 f"Removing subset relation: {existing_relation.attributes} in favor of {decomposed_relation.attributes}"
             )
             to_remove.append(existing_relation)  # Mark subset for removal
-        elif new_attrs.issubset(existing_attrs):
+        elif all(attr in existing_attrs for attr in new_attrs):
             print(
                 f"Skipping subset relation: {decomposed_relation.attributes} since {existing_relation.attributes} already exists"
             )
@@ -126,6 +180,9 @@ def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
     print(f"Adding new relation: {decomposed_relation.attributes}")
 
     return decomposed_relation_list
+
+
+# --------------------------------- Decompose ---------------------------------
 
 
 # Input: relation object, a list of anomalies
@@ -203,12 +260,10 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
                 )
             ]
         elif normalization_stage == "4":
-            decomposed_relation.functional_dependencies = [
-                fd
-                for fd in detect_4NF_anomalies(parent_relation, decomposed_relation)
-                if set(fd.get_x()).issubset(decomposed_relation.attributes)
-                and set(fd.get_y()).issubset(decomposed_relation.attributes)
-            ]
+            mvds = detect_4NF_anomalies(parent_relation)
+            if mvds:
+                mvds_relations = fix_mvds(parent_relation, mvds)
+                decomposed_relation_list.extend(mvds_relations)
 
         # Add the decomposed relation to the list, ensuring no duplicates
         decomposed_relation_list = exclude_duplicate_relations(
@@ -268,18 +323,19 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
                 )
             ]
         elif normalization_stage == "4":
-            decomposed_relation.functional_dependencies = [
-                fd
-                for fd in detect_4NF_anomalies(parent_relation)
-                if set(fd.get_x()).issubset(decomposed_relation.attributes)
-                and set(fd.get_y()).issubset(decomposed_relation.attributes)
-            ]
+            mvds = detect_4NF_anomalies(parent_relation)
+            if mvds:
+                mvds_relations = fix_mvds(parent_relation, mvds)
+                decomposed_relation_list.extend(mvds_relations)
 
         decomposed_relation_list = exclude_duplicate_relations(
             remaining_relation, decomposed_relation_list
         )
 
     return decomposed_relation_list
+
+
+# --------------------------------- Normalize Functions ---------------------------------
 
 
 def normalize_1NF(relation):
@@ -355,52 +411,39 @@ def normalize_3NF(relation):
     return final_3NF_relations
 
 
+# Modify normalize_BCNF to print data for each relation
 def normalize_BCNF(relation):
-    # Start BCNF normalization process
     print_normalization_stage("BCNF Normalization")
 
-    # Step 1: Normalize up to 3NF to start with relations in 3NF
     relations = normalize_3NF(relation)
-
-    # Initialize empty list for final BCNF relations
     final_BCNF_relations = []
     relation_counter = 1
 
-    # Iterate through each relation obtained from 3NF normalization
     for rel in relations:
-        # Detect anomalies specific to BCNF
-        anomalies = detect_BCNF_anomalies(
-            rel
-        )  # Find violations where determinants are not superkeys
-
-        # Store current functional dependencies
+        anomalies = detect_BCNF_anomalies(rel)
         stored_fds = rel.functional_dependencies[:]
 
-        # Step 2: If anomalies found (not in BCNF), decompose the relation
         if anomalies:
-            # Decompose relation for each detected anomaly
             list_of_BCNF_relations = decompose_relation(rel, anomalies, "B", stored_fds)
-
-            # Assign unique names to each new relation and add to final BCNF list
             for decomposed_relation in list_of_BCNF_relations:
                 decomposed_relation.name = relation_counter
                 final_BCNF_relations.append(decomposed_relation)
                 relation_counter += 1
         else:
-            # If no anomalies, keep the relation as it is
             rel.name = relation_counter
             final_BCNF_relations.append(rel)
             relation_counter += 1
 
-    # Display final BCNF relations after decomposition
+    # Print final BCNF relations and their data
     print_normalization_stage("Final BCNF Relations")
     for final_relation in final_BCNF_relations:
         final_relation.print_relation()
+        print_data(final_relation)  # Print data for each BCNF relation
 
     return final_BCNF_relations
 
 
-# Modify normalize_4NF to print data only for 4NF relations
+# Modify normalize_4NF to pass stored_fds to decompose_relation
 def normalize_4NF(relation):
     print_normalization_stage("4NF Normalization")
     bcnf_relations = normalize_BCNF(relation)
@@ -408,9 +451,13 @@ def normalize_4NF(relation):
 
     for bcnf_relation in bcnf_relations:
         mvds = detect_4NF_anomalies(bcnf_relation)
+        stored_fds = bcnf_relation.functional_dependencies[:]
 
         if mvds:
-            decomposed_relations_4NF = decompose_to_4NF(bcnf_relation, mvds)
+            # Pass stored_fds as the fourth argument
+            decomposed_relations_4NF = decompose_relation(
+                bcnf_relation, mvds, "4", stored_fds
+            )
             final_4NF_relations.extend(decomposed_relations_4NF)
         else:
             final_4NF_relations.append(bcnf_relation)
@@ -550,14 +597,31 @@ def has_independent_values(attribute, relation):
     return len(independent_values) > 1
 
 
-# Rename detect_MVDs to detect_4NF_anomalies
+# Detect MVDs (Multi-Valued Dependencies) in a relation
 def detect_4NF_anomalies(relation):
     mvds = []
-    # Loop through each attribute in the relation
-    for attribute in relation.attributes:
-        # Check if the attribute has independent multi-valued dependencies
-        if has_independent_values(
-            attribute, relation
-        ):  # Custom function to verify independence
-            mvds.append(attribute)
+    pk = relation.primary_key
+
+    # Check each functional dependency for repeated primary keys with differing values in Y attributes
+    for fd in relation.functional_dependencies:
+        X = fd.get_x()
+        Y = fd.get_y()
+
+        # Ensure X is the primary key to check for MVD conditions
+        if set(X) == set(pk):
+            # Gather unique Y values for each unique X value
+            x_values = {}
+            for data in relation.data:
+                x_value = tuple(data[attr] for attr in X)
+                y_value = tuple(data[attr] for attr in Y)
+
+                if x_value not in x_values:
+                    x_values[x_value] = set()
+                x_values[x_value].add(y_value)
+
+            # Check if any X values have multiple Y values
+            for x_value, y_values in x_values.items():
+                if len(y_values) > 1:  # Multi-Valued Dependency detected
+                    mvds.append((X, Y))
+
     return mvds
