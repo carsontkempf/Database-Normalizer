@@ -99,27 +99,18 @@ def input_functional_dependency(relation):
 
 
 def input_data(relation):
-    # Always enter the first tuple
-    data = input(
-        f"Enter tuple values (comma-separated for {relation.attributes}): "
-    ).split(",")
+    # Prompt for tuple values
+    data = (
+        input(f"Enter tuple values (comma-separated for {relation.attributes}): ")
+        .strip()
+        .split(",")
+    )
+
+    # Map input to relation attributes and clean whitespace
     data_dict = dict(zip(relation.attributes, [value.strip() for value in data]))
+
+    # Add the tuple to the relation
     relation.add_tuple(data_dict)
-
-    # Now ask if the user wants to add more tuples
-    while True:
-        more_input = (
-            input("Do you want to add another data tuple? (yes/no): ").strip().lower()
-        )
-        if more_input == "no":
-            break
-
-        # Prompt for the next tuple if 'yes'
-        data = input(
-            f"Enter tuple values (comma-separated for {relation.attributes}): "
-        ).split(",")
-        data_dict = dict(zip(relation.attributes, [value.strip() for value in data]))
-        relation.add_tuple(data_dict)
 
 
 # --------------------------------- Print Functions ---------------------------------

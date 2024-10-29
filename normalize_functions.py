@@ -104,24 +104,20 @@ def fix_mvds(relation, mvds):
     pk = relation.primary_key
     pk_values = set()
 
-    # Check and ensure uniqueness of primary key values
+    # Ensure unique primary keys
     for data in relation.data:
         pk_value = tuple(data[attr] for attr in pk)
         while pk_value in pk_values:
             print(f"Duplicate primary key value detected: {pk_value}")
-            new_pk_value = input(f"Enter a unique primary key value for {pk}: ")
+            new_pk_value = input(
+                f"Enter a unique primary key value for the {pk} value (the first data entry will remain the same): "
+            )
             for attr in pk:
-                data[attr] = (
-                    new_pk_value.strip()
-                )  # Update with the new unique primary key value
-            pk_value = tuple(
-                data[attr] for attr in pk
-            )  # Re-evaluate pk_value tuple after updating
+                data[attr] = new_pk_value.strip()
+            pk_value = tuple(data[attr] for attr in pk)
         pk_values.add(pk_value)
 
-    # Create new relations for each MVD
     for X, Y in mvds:
-        # Define attributes for the new relation
         attributes = X + Y
         new_relation = Relation(
             name=f"{relation.name}_{'_'.join(Y)}", attributes=attributes
@@ -129,7 +125,6 @@ def fix_mvds(relation, mvds):
         new_relation.primary_key = X
         new_relation.functional_dependencies = [FunctionalDependency(X, Y)]
 
-        # Assign data to the new relation
         for data in relation.data:
             new_data = {attr: data[attr] for attr in attributes}
             new_relation.add_tuple(new_data)
@@ -144,40 +139,51 @@ def nested_to_tuple(lst):
 
 
 def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
-    # Check if attributes of decomposed_relation are list, if so convert them to tuple
+    # Flatten and deduplicate attributes to remove nested lists
     new_attrs = {nested_to_tuple(attr): True for attr in decomposed_relation.attributes}
+    flattened_new_attrs = list(
+        set(
+            attr
+            for sublist in new_attrs.keys()
+            for attr in (sublist if isinstance(sublist, tuple) else [sublist])
+        )
+    )
 
     to_remove = []
     for existing_relation in decomposed_relation_list:
-
-        # Check if attributes of existing_relation are list, if so convert them to tuple
         existing_attrs = {
             nested_to_tuple(attr): True for attr in existing_relation.attributes
         }
+        flattened_existing_attrs = list(
+            set(
+                attr
+                for sublist in existing_attrs.keys()
+                for attr in (sublist if isinstance(sublist, tuple) else [sublist])
+            )
+        )
 
-        if new_attrs == existing_attrs:
+        # Compare flattened attribute lists
+        if set(flattened_new_attrs) == set(flattened_existing_attrs):
             print(
                 f"Skipping exact duplicate relation: {decomposed_relation.attributes}"
             )
-            return decomposed_relation_list  # Skip adding duplicate
-        elif all(attr in new_attrs for attr in existing_attrs):
+            return decomposed_relation_list
+        elif set(flattened_existing_attrs).issubset(flattened_new_attrs):
             print(
                 f"Removing subset relation: {existing_relation.attributes} in favor of {decomposed_relation.attributes}"
             )
-            to_remove.append(existing_relation)  # Mark subset for removal
-        elif all(attr in existing_attrs for attr in new_attrs):
+            to_remove.append(existing_relation)
+        elif set(flattened_new_attrs).issubset(flattened_existing_attrs):
             print(
                 f"Skipping subset relation: {decomposed_relation.attributes} since {existing_relation.attributes} already exists"
             )
-            return decomposed_relation_list  # Skip adding subset
+            return decomposed_relation_list
 
-    # Remove marked subset relations
     for relation in to_remove:
         decomposed_relation_list.remove(relation)
 
-    # Add the new relation after checking duplicates
     decomposed_relation_list.append(decomposed_relation)
-    print(f"Adding new relation: {decomposed_relation.attributes}")
+    print(f"Adding new relation: {flattened_new_attrs}")
 
     return decomposed_relation_list
 
@@ -448,19 +454,23 @@ def normalize_4NF(relation):
     print_normalization_stage("4NF Normalization")
     bcnf_relations = normalize_BCNF(relation)
     final_4NF_relations = []
+    relation_counter = 1  # Counter to name each relation sequentially
 
     for bcnf_relation in bcnf_relations:
         mvds = detect_4NF_anomalies(bcnf_relation)
         stored_fds = bcnf_relation.functional_dependencies[:]
 
         if mvds:
-            # Pass stored_fds as the fourth argument
-            decomposed_relations_4NF = decompose_relation(
-                bcnf_relation, mvds, "4", stored_fds
-            )
-            final_4NF_relations.extend(decomposed_relations_4NF)
+            # Fix MVDs and get decomposed relations
+            decomposed_relations_4NF = fix_mvds(bcnf_relation, mvds)
+            for rel in decomposed_relations_4NF:
+                rel.name = relation_counter  # Assign sequential names
+                final_4NF_relations.append(rel)
+                relation_counter += 1
         else:
+            bcnf_relation.name = relation_counter  # Assign name if no MVDs
             final_4NF_relations.append(bcnf_relation)
+            relation_counter += 1
 
     print_normalization_stage("Final 4NF Relations")
     for final_relation in final_4NF_relations:
