@@ -103,7 +103,9 @@ def input_data(relation):
         data = input(
             f"Enter tuple values (comma-separated for {relation.attributes}): "
         ).split(",")
-        relation.add_tuple([value.strip() for value in data])
+        data_dict = dict(zip(relation.attributes, [value.strip() for value in data]))
+
+        relation.add_tuple(data_dict)
 
         more_input = (
             input("Do you want to add another data tuple? (yes/no): ").strip().lower()

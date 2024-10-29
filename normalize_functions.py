@@ -12,6 +12,25 @@ def print_normalization_stage(stage_name):
     print_divider()
 
 
+# Define the print_data function to display data neatly under attribute headers with dictionary access
+def print_data(relation):
+    if not relation.data:
+        print("No data available in relation.")
+        return
+
+    # Print attribute names as headers
+    print("\nData:")
+    print(" | ".join(relation.attributes))
+    print("-" * (len(relation.attributes) * 15))
+
+    # Print each row by accessing data as dictionaries
+    for data_dict in relation.data:
+        print(
+            " | ".join(str(data_dict[attr]).ljust(15) for attr in relation.attributes)
+        )
+    print()
+
+
 def fix_partial_functional_dependencies(parent_relation, decomposed_relation):
     adjusted_fds = []
 
@@ -125,7 +144,7 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
 
     for anomaly in anomaly_list:
         decomposed_relation = Relation(name=str(count), attributes=[])
-        decomposed_relation.name = f"Relation {count}"
+        decomposed_relation.name = count
         count += 1  # Increment count for unique naming
 
         # Process anomalies to create new relations
@@ -183,6 +202,13 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
                     )
                 )
             ]
+        elif normalization_stage == "4":
+            decomposed_relation.functional_dependencies = [
+                fd
+                for fd in detect_4NF_anomalies(parent_relation, decomposed_relation)
+                if set(fd.get_x()).issubset(decomposed_relation.attributes)
+                and set(fd.get_y()).issubset(decomposed_relation.attributes)
+            ]
 
         # Add the decomposed relation to the list, ensuring no duplicates
         decomposed_relation_list = exclude_duplicate_relations(
@@ -192,7 +218,7 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
     # Handle remaining attributes as a final relation if not empty
     if all_parent_attributes:
         remaining_relation = Relation(name=str(count), attributes=all_parent_attributes)
-        remaining_relation.name = f"Relation {count}"
+        remaining_relation.name = count
 
         # Ensure primary key is included in the decomposed relation
         for pk in parent_relation.primary_key:
@@ -229,6 +255,25 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
             remaining_relation.functional_dependencies = (
                 fix_transitive_functional_dependencies(remaining_relation)
             )
+
+        elif normalization_stage == "B":
+            # BCNF: Remove any dependencies where the determinant is not a superkey
+            remaining_relation.functional_dependencies = [
+                fd
+                for fd in remaining_relation.functional_dependencies
+                if set(fd.get_x()).issuperset(
+                    set(remaining_relation.primary_key).union(
+                        *remaining_relation.candidate_keys
+                    )
+                )
+            ]
+        elif normalization_stage == "4":
+            decomposed_relation.functional_dependencies = [
+                fd
+                for fd in detect_4NF_anomalies(parent_relation)
+                if set(fd.get_x()).issubset(decomposed_relation.attributes)
+                and set(fd.get_y()).issubset(decomposed_relation.attributes)
+            ]
 
         decomposed_relation_list = exclude_duplicate_relations(
             remaining_relation, decomposed_relation_list
@@ -338,12 +383,12 @@ def normalize_BCNF(relation):
 
             # Assign unique names to each new relation and add to final BCNF list
             for decomposed_relation in list_of_BCNF_relations:
-                decomposed_relation.name = f"Relation {relation_counter}"
+                decomposed_relation.name = relation_counter
                 final_BCNF_relations.append(decomposed_relation)
                 relation_counter += 1
         else:
             # If no anomalies, keep the relation as it is
-            rel.name = f"Relation {relation_counter}"
+            rel.name = relation_counter
             final_BCNF_relations.append(rel)
             relation_counter += 1
 
@@ -355,33 +400,30 @@ def normalize_BCNF(relation):
     return final_BCNF_relations
 
 
+# Modify normalize_4NF to print data only for 4NF relations
 def normalize_4NF(relation):
     print_normalization_stage("4NF Normalization")
-    relations = normalize_BCNF(relation)
+    bcnf_relations = normalize_BCNF(relation)
     final_4NF_relations = []
-    relation_counter = 1
 
-    for rel in relations:
-        anomalies = detect_4NF_anomalies(rel)
-        stored_fds = rel.functional_dependencies[:]
-        if anomalies:
-            list_of_4NF_relations = decompose_relation(rel, anomalies, "4", stored_fds)
-            for decomposed_relation in list_of_4NF_relations:
-                decomposed_relation.name = relation_counter
-                final_4NF_relations.append(decomposed_relation)
-                relation_counter += 1
+    for bcnf_relation in bcnf_relations:
+        mvds = detect_4NF_anomalies(bcnf_relation)
+
+        if mvds:
+            decomposed_relations_4NF = decompose_to_4NF(bcnf_relation, mvds)
+            final_4NF_relations.extend(decomposed_relations_4NF)
         else:
-            rel.name = relation_counter
-            final_4NF_relations.append(rel)
-            relation_counter += 1
+            final_4NF_relations.append(bcnf_relation)
 
     print_normalization_stage("Final 4NF Relations")
     for final_relation in final_4NF_relations:
         final_relation.print_relation()
+        print_data(final_relation)  # Print data for each 4NF relation
 
     return final_4NF_relations
 
 
+# Modify normalize_5NF to print data only for 5NF relations
 def normalize_5NF(relation):
     print_normalization_stage("5NF Normalization")
     relations = normalize_4NF(relation)
@@ -393,24 +435,19 @@ def normalize_5NF(relation):
         stored_fds = rel.functional_dependencies[:]
         if anomalies:
             list_of_5NF_relations = decompose_relation(rel, anomalies, "5", stored_fds)
-            for decomposed_relation in list_of_5NF_relations:
-                decomposed_relation.name = relation_counter
-                final_5NF_relations.append(decomposed_relation)
-                relation_counter += 1
+            final_5NF_relations.extend(list_of_5NF_relations)
         else:
-            rel.name = relation_counter
             final_5NF_relations.append(rel)
-            relation_counter += 1
 
     print_normalization_stage("Final 5NF Relations")
     for final_relation in final_5NF_relations:
         final_relation.print_relation()
+        print_data(final_relation)  # Print data for each 5NF relation
 
     return final_5NF_relations
 
 
-# --------------------------------- Anomaly Functions ---------------------------------
-# Anomaly Detection
+# --------------------------------- Detect Anomaly Functions ---------------------------------
 def detect_1NF_anomalies(relation):
     anomalies = []
     for attribute in relation.attributes:
@@ -482,3 +519,45 @@ def detect_BCNF_anomalies(relation):
             anomalies.append(fd)  # Add violating FD to anomalies list
 
     return anomalies
+
+
+# Rename detect_MVDs to detect_4NF_anomalies
+def detect_4NF_anomalies(relation):
+    mvds = []
+    # Loop through each attribute in the relation
+    for attribute in relation.attributes:
+        # Check if the attribute has independent multi-valued dependencies
+        if has_independent_values(
+            attribute, relation
+        ):  # Custom function to verify independence
+            mvds.append(attribute)
+    return mvds
+
+
+def has_independent_values(attribute, relation):
+    # Logic to verify if the attribute has independent values from other attributes in the relation
+    independent_values = set()
+    if attribute not in relation.attributes:
+        return False
+
+    try:
+        for row in relation.data:
+            independent_values.add(row[relation.attributes.index(attribute)])
+    except KeyError:
+        return False
+
+    # If the attribute has multiple independent values across rows, it's likely part of an MVD
+    return len(independent_values) > 1
+
+
+# Rename detect_MVDs to detect_4NF_anomalies
+def detect_4NF_anomalies(relation):
+    mvds = []
+    # Loop through each attribute in the relation
+    for attribute in relation.attributes:
+        # Check if the attribute has independent multi-valued dependencies
+        if has_independent_values(
+            attribute, relation
+        ):  # Custom function to verify independence
+            mvds.append(attribute)
+    return mvds
