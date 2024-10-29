@@ -45,23 +45,25 @@ def fix_transitive_functional_dependencies(relation):
     primary_key = set(relation.primary_key)
     transitive_dependents = set()
     new_fds = []
+    direct_dependencies = (
+        set()
+    )  # Track intermediaries with direct dependencies on the primary key
 
-    # Step 1: Identify direct and transitive dependencies
+    # Step 1: Identify direct dependencies and potential intermediaries
     for fd in relation.functional_dependencies:
-        fd_x = set(fd.get_x())
-        fd_y = set(fd.get_y())
+        fd_x = set(fd.get_x())  # Determinant
+        fd_y = set(fd.get_y())  # Dependents
 
-        # If X is a subset of primary_key, it’s a direct dependency
+        # If fd_x exactly matches the primary key, it's a direct dependency
         if fd_x == primary_key:
             new_fds.append(fd)
+            # Record each dependent as directly dependent on the primary key
+            direct_dependencies.update(fd_y)
         else:
-            # If X is not equal to primary_key but Y is not part of the primary key, it's a transitive dependency
-            for y_attr in fd_y:
-                if y_attr not in primary_key:
-                    transitive_dependents.update(
-                        fd_y
-                    )  # Add all dependents for consolidation
-                    print(f"Transitive dependency detected: {fd_x} -> {fd_y}")
+            # If fd_x is a direct dependent of the primary key, add fd_y as intermediaries
+            if fd_x.issubset(direct_dependencies):
+                print(f"Transitive dependency detected: {fd_x} -> {fd_y}")
+                transitive_dependents.update(fd_y)
 
     # Step 2: Replace transitive dependencies with primary_key -> transitive_dependents
     if transitive_dependents:
@@ -170,6 +172,17 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
             decomposed_relation.functional_dependencies = (
                 fix_transitive_functional_dependencies(decomposed_relation)
             )
+        elif normalization_stage == "B":
+            # BCNF: Remove any dependencies where the determinant is not a superkey
+            decomposed_relation.functional_dependencies = [
+                fd
+                for fd in decomposed_relation.functional_dependencies
+                if set(fd.get_x()).issuperset(
+                    set(decomposed_relation.primary_key).union(
+                        *decomposed_relation.candidate_keys
+                    )
+                )
+            ]
 
         # Add the decomposed relation to the list, ensuring no duplicates
         decomposed_relation_list = exclude_duplicate_relations(
@@ -298,25 +311,43 @@ def normalize_3NF(relation):
 
 
 def normalize_BCNF(relation):
+    # Start BCNF normalization process
     print_normalization_stage("BCNF Normalization")
+
+    # Step 1: Normalize up to 3NF to start with relations in 3NF
     relations = normalize_3NF(relation)
+
+    # Initialize empty list for final BCNF relations
     final_BCNF_relations = []
     relation_counter = 1
 
+    # Iterate through each relation obtained from 3NF normalization
     for rel in relations:
-        anomalies = detect_BCNF_anomalies(rel)
+        # Detect anomalies specific to BCNF
+        anomalies = detect_BCNF_anomalies(
+            rel
+        )  # Find violations where determinants are not superkeys
+
+        # Store current functional dependencies
         stored_fds = rel.functional_dependencies[:]
+
+        # Step 2: If anomalies found (not in BCNF), decompose the relation
         if anomalies:
+            # Decompose relation for each detected anomaly
             list_of_BCNF_relations = decompose_relation(rel, anomalies, "B", stored_fds)
+
+            # Assign unique names to each new relation and add to final BCNF list
             for decomposed_relation in list_of_BCNF_relations:
-                decomposed_relation.name = relation_counter
+                decomposed_relation.name = f"Relation {relation_counter}"
                 final_BCNF_relations.append(decomposed_relation)
                 relation_counter += 1
         else:
-            rel.name = relation_counter
+            # If no anomalies, keep the relation as it is
+            rel.name = f"Relation {relation_counter}"
             final_BCNF_relations.append(rel)
             relation_counter += 1
 
+    # Display final BCNF relations after decomposition
     print_normalization_stage("Final BCNF Relations")
     for final_relation in final_BCNF_relations:
         final_relation.print_relation()
@@ -430,5 +461,24 @@ def detect_3NF_anomalies(relation):
                     # Add to anomalies in format "A|B|C"
                     if transitive_anomaly_str not in anomalies:
                         anomalies.append(transitive_anomaly_str)
+
+    return anomalies
+
+
+def detect_BCNF_anomalies(relation):
+    anomalies = []  # Initialize an empty list to store BCNF anomalies
+
+    # Get all attributes involved in the primary key and candidate keys
+    primary_key = set(relation.primary_key)
+    all_superkeys = primary_key.union(*relation.candidate_keys)
+
+    # Loop through each functional dependency to check if the determinant is a superkey
+    for fd in relation.functional_dependencies:
+        fd_x = set(fd.get_x())  # Left side of FD (determinant)
+
+        # Check if fd_x is not a superkey (does not fully determine all attributes in the relation)
+        if not fd_x.issuperset(all_superkeys):
+            # If the FD's determinant isn't a superkey, it's a BCNF violation
+            anomalies.append(fd)  # Add violating FD to anomalies list
 
     return anomalies
