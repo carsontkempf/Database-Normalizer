@@ -102,7 +102,7 @@ def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
 # anomaly_list = ['abc', 'def|ghi', 'jkl']
 # Output: list of relation objects
 # Main decomposition function for detected anomalies
-def decompose_relation(parent_relation, anomaly_list):
+def decompose_relation(parent_relation, anomaly_list, normalization_stage):
     if not anomaly_list:
         return (
             []
@@ -117,7 +117,7 @@ def decompose_relation(parent_relation, anomaly_list):
     # Process each anomaly to create new relations
     for anomaly in anomaly_list:
         decomposed_relation = Relation(name=str(count), attributes=[])
-        decomposed_relation.name = f"Relation_{count}"  # Use unique name format
+        decomposed_relation.name = count
 
         # Handle non-nested anomalies directly
         if "|" not in anomaly:
@@ -142,15 +142,20 @@ def decompose_relation(parent_relation, anomaly_list):
         decomposed_relation.foreign_keys = parent_relation.foreign_keys[:]
         decomposed_relation.candidate_keys = parent_relation.candidate_keys[:]
 
-        # Adjust functional dependencies
-        decomposed_relation.functional_dependencies = (
-            fix_partial_functional_dependencies(parent_relation, decomposed_relation)
-        )
-
-        # Detect and fix transitive dependencies
-        decomposed_relation.functional_dependencies = (
-            fix_transitive_functional_dependencies(decomposed_relation)
-        )
+        if normalization_stage == "1":
+            decomposed_relation.functional_dependencies = (
+                parent_relation.functional_dependencies[:]
+            )
+        elif normalization_stage == "2":
+            decomposed_relation.functional_dependencies = (
+                fix_partial_functional_dependencies(
+                    parent_relation, decomposed_relation
+                )
+            )
+        elif normalization_stage == "3":
+            decomposed_relation.functional_dependencies = (
+                fix_transitive_functional_dependencies(decomposed_relation)
+            )
 
         # Add newly created relation to list
         decomposed_relation_list = exclude_duplicate_relations(
@@ -162,7 +167,7 @@ def decompose_relation(parent_relation, anomaly_list):
     # Add remaining attributes as a new relation if not empty
     if all_parent_attributes:
         remaining_relation = Relation(name=str(count), attributes=all_parent_attributes)
-        remaining_relation.name = f"Relation_{count}"  # Ensure a unique name
+        remaining_relation.name = count
 
         # Ensure primary key is added to remaining relation
         for pk in parent_relation.primary_key:
@@ -173,15 +178,19 @@ def decompose_relation(parent_relation, anomaly_list):
         remaining_relation.foreign_keys = parent_relation.foreign_keys[:]
         remaining_relation.candidate_keys = parent_relation.candidate_keys[:]
 
-        # Adjust functional dependencies for the remaining relation
-        remaining_relation.functional_dependencies = (
-            fix_partial_functional_dependencies(parent_relation, remaining_relation)
-        )
-
-        # Detect and fix transitive dependencies for the remaining relation
-        remaining_relation.functional_dependencies = (
-            fix_transitive_functional_dependencies(remaining_relation)
-        )
+        if normalization_stage == "1":
+            # Directly inherit the parent's functional dependencies
+            remaining_relation.functional_dependencies = (
+                parent_relation.functional_dependencies[:]
+            )
+        elif normalization_stage == "2":
+            remaining_relation.functional_dependencies = (
+                fix_partial_functional_dependencies(parent_relation, remaining_relation)
+            )
+        elif normalization_stage == "3":
+            remaining_relation.functional_dependencies = (
+                fix_transitive_functional_dependencies(remaining_relation)
+            )
 
         decomposed_relation_list = exclude_duplicate_relations(
             remaining_relation, decomposed_relation_list
@@ -197,7 +206,7 @@ def normalize_1NF(relation):
     print_normalization_stage("Final 1NF Relations")
 
     if anomalies:
-        list_of_1NF_relations = decompose_relation(relation, anomalies)
+        list_of_1NF_relations = decompose_relation(relation, anomalies, "1")
         for decomposed_relation in list_of_1NF_relations:
             decomposed_relation.print_relation()
         return list_of_1NF_relations
@@ -214,7 +223,7 @@ def normalize_2NF(relation):
     for rel in list_of_1NF_relations:
         anomalies = detect_2NF_anomalies(rel)
         if anomalies:
-            list_of_2NF_relations = decompose_relation(rel, anomalies)
+            list_of_2NF_relations = decompose_relation(rel, anomalies, "2")
             final_2NF_relations.extend(list_of_2NF_relations)
         else:
             final_2NF_relations.append(rel)
@@ -236,7 +245,7 @@ def normalize_3NF(relation):
     for rel in relations:
         anomalies = detect_3NF_anomalies(rel)
         if anomalies:
-            list_of_3NF_relations = decompose_relation(rel, anomalies)
+            list_of_3NF_relations = decompose_relation(rel, anomalies, "3")
             final_3NF_relations.extend(list_of_3NF_relations)
         else:
             final_3NF_relations.append(rel)
@@ -253,7 +262,7 @@ def normalize_BCNF(relation):
     relations = normalize_3NF(relation)
     anomalies = detect_BCNF_anomalies(relation)
     if anomalies:
-        list_of_BCNF_relations = decompose_relation(relation, anomalies)
+        list_of_BCNF_relations = decompose_relation(relation, anomalies, "B")
         for decomposed_relation in list_of_BCNF_relations:
             decomposed_relation.print_relation()
         return list_of_BCNF_relations
@@ -267,7 +276,7 @@ def normalize_4NF(relation):
     relations = normalize_BCNF(relation)
     anomalies = detect_4NF_anomalies(relation)
     if anomalies:
-        list_of_4NF_relations = decompose_relation(relation, anomalies)
+        list_of_4NF_relations = decompose_relation(relation, anomalies, "4")
         for decomposed_relation in list_of_4NF_relations:
             decomposed_relation.print_relation()
         return list_of_4NF_relations
@@ -281,7 +290,7 @@ def normalize_5NF(relation):
     relations = normalize_4NF(relation)
     anomalies = detect_5NF_anomalies(relation)
     if anomalies:
-        list_of_5NF_relations = decompose_relation(relation, anomalies)
+        list_of_5NF_relations = decompose_relation(relation, anomalies, "5")
         for decomposed_relation in list_of_5NF_relations:
             decomposed_relation.print_relation()
         return list_of_5NF_relations
