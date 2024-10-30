@@ -53,8 +53,15 @@ def input_relation():
         "Enter primary keys (keys separated by comma, attributes separated by semicolon): "
     )
 
-    # Split the input string based on comma and semicolon delimiters to generate a list of primary keys
-    primary_key = [key.strip().split(",") for key in primary_key_input.split(";")]
+    # If primary_key_input is empty, set a default primary key as "<name>_id"
+    if not primary_key_input:
+        primary_key = [[f"{name}_id"]]
+        attributes.append(
+            f"{name}_id"
+        )  # Ensure the primary key attribute is in attributes list
+    else:
+        # Split the input string based on comma and semicolon delimiters to generate a list of primary keys
+        primary_key = [key.strip().split(",") for key in primary_key_input.split(";")]
 
     candidate_keys_input = input(
         "Enter candidate keys (keys separated by comma, attributes separated by semicolon): "

@@ -13,7 +13,7 @@ input_data_1NF = [
     "yes",
     "no",
     "no",
-    # "yes", # Is 'student_id' atomic?
+    "yes",  # Is 'student_id' atomic?
 ]
 
 input_data_2NF = [
@@ -50,7 +50,7 @@ input_data_3NF = [
     "yes",  # Is 'ssn' atomic?
     "yes",  # Is 'home_address' atomic?
     "no",  # Is 'phone_number' atomic?
-    # "yes", # Is 'student_id' atomic?
+    "yes",  # Is 'student_id' atomic?
 ]
 
 input_data_BCNF = [
@@ -85,7 +85,7 @@ input_data_4NF = [
     "no",  # Stop adding data tuples
     "yes",  # Confirm 'fname' is atomic
     "yes",  # Confirm 'lname' is atomic
-    # "yes", # Is 'student_id' atomic?
+    "yes",  # Is 'student_id' atomic?
 ]
 
 input_data_5NF = [

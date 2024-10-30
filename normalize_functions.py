@@ -10,7 +10,7 @@ def print_divider():
 
 def print_normalization_stage(stage_name):
     print_divider()
-    print(f"Starting {stage_name}")
+    print(stage_name)
     print_divider()
 
 
@@ -306,10 +306,10 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
 
 
 def normalize_1NF(relation):
-    print_normalization_stage("1NF Normalization")
+    print_normalization_stage("1NF Normalization Started")
     anomalies = detect_1NF_anomalies(relation)
 
-    print_normalization_stage("Final 1NF Relations")
+    print_normalization_stage("Relations in 1NF")
 
     # Store the original functional dependencies and data
     stored_fds = relation.functional_dependencies[:]
@@ -328,7 +328,7 @@ def normalize_1NF(relation):
 
 
 def normalize_2NF(relation):
-    print_normalization_stage("2NF Normalization")
+    print_normalization_stage("2NF Normalization Started")
     list_of_1NF_relations = normalize_1NF(relation)
     final_2NF_relations = []
 
@@ -350,7 +350,7 @@ def normalize_2NF(relation):
             rel.data = stored_data[:]
             final_2NF_relations.append(rel)
 
-    print_normalization_stage("Final 2NF Relations")
+    print_normalization_stage("Relations in 2NF")
     for index, final_relation in enumerate(final_2NF_relations, start=1):
         final_relation.name = index
         final_relation.print_relation()
@@ -359,7 +359,7 @@ def normalize_2NF(relation):
 
 
 def normalize_3NF(relation):
-    print_normalization_stage("3NF Normalization")
+    print_normalization_stage("3NF Normalization Started")
     relations = normalize_2NF(relation)
     final_3NF_relations = []
     relation_counter = 1
@@ -386,7 +386,7 @@ def normalize_3NF(relation):
             final_3NF_relations.append(rel)
             relation_counter += 1
 
-    print_normalization_stage("Final 3NF Relations")
+    print_normalization_stage("Relations in 3NF")
     for final_relation in final_3NF_relations:
         final_relation.print_relation()
 
@@ -394,7 +394,7 @@ def normalize_3NF(relation):
 
 
 def normalize_BCNF(relation):
-    print_normalization_stage("BCNF Normalization")
+    print_normalization_stage("BCNF Normalization Started")
     relations = normalize_3NF(relation)
     final_BCNF_relations = []
     relation_counter = 1
@@ -421,7 +421,7 @@ def normalize_BCNF(relation):
             final_BCNF_relations.append(rel)
             relation_counter += 1
 
-    print_normalization_stage("Final BCNF Relations")
+    print_normalization_stage("Relations in BCNF")
     for final_relation in final_BCNF_relations:
         final_relation.print_relation()
         print_data(final_relation)  # Print data for each BCNF relation
@@ -430,7 +430,7 @@ def normalize_BCNF(relation):
 
 
 def normalize_4NF(relation):
-    print_normalization_stage("4NF Normalization")
+    print_normalization_stage("4NF Normalization Started")
     bcnf_relations = normalize_BCNF(relation)
     final_4NF_relations = []
     relation_counter = 1
@@ -457,7 +457,7 @@ def normalize_4NF(relation):
             final_4NF_relations.append(bcnf_relation)
             relation_counter += 1
 
-    print_normalization_stage("Final 4NF Relations")
+    print_normalization_stage("Relations in 4NF")
     for final_relation in final_4NF_relations:
         final_relation.print_relation()
         print_data(final_relation)
@@ -466,7 +466,7 @@ def normalize_4NF(relation):
 
 
 def normalize_5NF(relation):
-    print_normalization_stage("5NF Normalization")
+    print_normalization_stage("5NF Normalization Started")
     relations = normalize_4NF(relation)
     final_5NF_relations = []
     relation_counter = 1
@@ -493,7 +493,7 @@ def normalize_5NF(relation):
             final_5NF_relations.append(rel)
             relation_counter += 1
 
-    print_normalization_stage("Final 5NF Relations")
+    print_normalization_stage("Relations in 5NF")
     for final_relation in final_5NF_relations:
         final_relation.print_relation()
         print_data(final_relation)
