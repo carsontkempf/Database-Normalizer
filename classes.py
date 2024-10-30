@@ -36,9 +36,9 @@ class Relation:
     # Adds a primary key to the relation; supports composite keys
     def add_primary_key(self, key):
         if isinstance(key, list):
-            self.primary_key.extend(key)
-        else:
             self.primary_key.append(key)
+        else:
+            self.primary_key.append([key])
 
     # Adds a candidate key to the relation; supports composite candidate keys
     def add_candidate_key(self, candidate_key):
@@ -87,7 +87,8 @@ class Relation:
     def print_relation(self):
         print(f"\nRelation: {self.name}")
         print(f"Attributes: {', '.join(map(str, self.attributes))}")
-        print(f"Primary Key: {', '.join(map(str, self.primary_key))}")
+        primary_key_display = ", ".join(f"({', '.join(pk)})" for pk in self.primary_key)
+        print(f"Primary Key: {primary_key_display}")
 
         if self.candidate_keys:
             print("Candidate Keys:")
