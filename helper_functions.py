@@ -51,37 +51,48 @@ def build_relation(
 def input_relation():
     name = input("Enter the name of the relation: ").strip()
     attributes = input("Enter attributes (comma-separated): ").split(",")
-    attributes = [attr.strip() for attr in attributes]
+    attributes = [
+        attr.strip() for attr in attributes if attr.strip()
+    ]  # Ignore empty attributes
 
     primary_key_input = input(
-        "Enter primary key (comma-separated if composite), or press Enter for default: "
+        "Enter primary key(s) (comma-separated for each key, semicolon-separated for multiple keys), or press Enter for default: "
     ).strip()
     if not primary_key_input:
-        primary_key = [f"{name}_id"]
-        print(f"Default primary key '{primary_key[0]}' will be used.")
-        if primary_key[0] not in attributes:
-            attributes.append(primary_key[0])
+        primary_key = [[f"{name}_id"]]  # Ensures primary key format as list of lists
+        if (
+            primary_key[0][0] not in attributes
+        ):  # Ensure default primary key is added to attributes
+            attributes.append(primary_key[0][0])
+        print(f"Default primary key '{primary_key[0][0]}' will be used.")
     else:
-        primary_key = [key.strip() for key in primary_key_input.split(",")]
-
-    if not set(primary_key).issubset(attributes):
-        raise ValueError("Primary key must be a subset of the relation's attributes.")
+        primary_key = [
+            key_group.strip().split(",")
+            for key_group in primary_key_input.split(";")
+            if key_group.strip()
+        ] or None  # Set to None if no valid input is given
 
     candidate_keys_input = input(
         "Enter candidate key(s) (comma-separated for each key, semicolon-separated for multiple keys): "
     ).strip()
-    candidate_keys = None
-    if candidate_keys_input:
-        candidate_keys = [
-            key.strip().split(",") for key in candidate_keys_input.split(";")
+    candidate_keys = (
+        [
+            key.strip().split(",")
+            for key in candidate_keys_input.split(";")
+            if key.strip()
         ]
+        if candidate_keys_input
+        else None
+    )  # Set to None if input is empty
 
     foreign_keys_input = input(
         "Enter foreign key(s) (comma-separated for each key, semicolon-separated for multiple keys): "
     ).strip()
-    foreign_keys = None
-    if foreign_keys_input:
-        foreign_keys = [key.strip().split(",") for key in foreign_keys_input.split(";")]
+    foreign_keys = (
+        [key.strip().split(",") for key in foreign_keys_input.split(";") if key.strip()]
+        if foreign_keys_input
+        else None
+    )  # Set to None if input is empty
 
     return build_relation(
         name=name,
@@ -95,7 +106,16 @@ def input_relation():
 def input_functional_dependency(relation):
     X = input("Enter the determinant attributes (X) (comma-separated): ").split(",")
     Y = input("Enter the dependent attributes (Y) (comma-separated): ").split(",")
-    relation.add_functional_dependency([x.strip() for x in X], [y.strip() for y in Y])
+
+    # Strip whitespace and filter out empty strings in X and Y
+    X = [x.strip() for x in X if x.strip()]
+    Y = [y.strip() for y in Y if y.strip()]
+
+    # Only add the functional dependency if both X and Y are non-empty
+    if X and Y:
+        relation.add_functional_dependency(X, Y)
+    else:
+        print("Empty functional dependency not added.")
 
 
 def input_data(relation):

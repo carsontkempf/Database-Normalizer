@@ -41,7 +41,9 @@ def fix_partial_functional_dependencies(parent_relation, decomposed_relation):
     for fd in parent_relation.functional_dependencies:
         fd_x = set(fd.get_x())
         fd_y = set(fd.get_y())
-        primary_key_set = set(parent_relation.primary_key)
+        primary_key_sets = [
+            set(pk) for pk in parent_relation.primary_key
+        ]  # Adjusted for new format
 
         # Check if the X attributes (determinants) are in the decomposed relation
         if fd_x.issubset(decomposed_relation.attributes):
@@ -51,70 +53,66 @@ def fix_partial_functional_dependencies(parent_relation, decomposed_relation):
                     decomposed_relation.attributes.append(y_attr)
 
             # Check if the FD is a partial dependency
-            if fd_x.issubset(primary_key_set) and fd_x != primary_key_set:
+            if any(fd_x.issubset(pk) and fd_x != pk for pk in primary_key_sets):
                 print(f"Partial dependency detected: {fd_x} -> {fd_y}")
 
                 # Create a new FD with adjusted primary key if partial dependency
-                adjusted_fd = FunctionalDependency(list(primary_key_set), list(fd_y))
+                adjusted_fd = FunctionalDependency(
+                    list(primary_key_sets[0]), list(fd_y)
+                )
                 adjusted_fds.append(adjusted_fd)
             else:
-                # Append the original FD as it is if no adjustment is needed
                 adjusted_fds.append(fd)
 
     return adjusted_fds
 
 
 def fix_transitive_functional_dependencies(relation):
-    primary_key = set(relation.primary_key)
+    primary_key_sets = [
+        set(pk) for pk in relation.primary_key
+    ]  # Adjusted for new format
     transitive_dependents = set()
     new_fds = []
-    direct_dependencies = (
-        set()
-    )  # Track intermediaries with direct dependencies on the primary key
+    direct_dependencies = set()
 
-    # Step 1: Identify direct dependencies and potential intermediaries
     for fd in relation.functional_dependencies:
-        fd_x = set(fd.get_x())  # Determinant
-        fd_y = set(fd.get_y())  # Dependents
+        fd_x = set(fd.get_x())
+        fd_y = set(fd.get_y())
 
-        # If fd_x exactly matches the primary key, it's a direct dependency
-        if fd_x == primary_key:
+        # Check if fd_x exactly matches any primary key set
+        if any(fd_x == pk for pk in primary_key_sets):
             new_fds.append(fd)
-            # Record each dependent as directly dependent on the primary key
             direct_dependencies.update(fd_y)
         else:
-            # If fd_x is a direct dependent of the primary key, add fd_y as intermediaries
             if fd_x.issubset(direct_dependencies):
                 print(f"Transitive dependency detected: {fd_x} -> {fd_y}")
                 transitive_dependents.update(fd_y)
 
-    # Step 2: Replace transitive dependencies with primary_key -> transitive_dependents
     if transitive_dependents:
         consolidated_fd = FunctionalDependency(
-            list(primary_key), list(transitive_dependents)
+            list(primary_key_sets[0]), list(transitive_dependents)
         )
         new_fds.append(consolidated_fd)
 
     return new_fds
 
 
-# Fix detected MVDs by creating new relations and managing primary key uniqueness
 def fix_mvds(relation, mvds):
     new_relations = []
-    pk = relation.primary_key
-    pk_values = set()
+    pk_sets = relation.primary_key  # Adjusted to handle lists of lists
 
-    # Ensure unique primary keys
+    pk_values = set()
     for data in relation.data:
-        pk_value = tuple(data[attr] for attr in pk)
+        pk_value = tuple(tuple(data[attr] for attr in pk) for pk in pk_sets)
         while pk_value in pk_values:
             print(f"Duplicate primary key value detected: {pk_value}")
             new_pk_value = input(
-                f"Enter a unique primary key value for the {pk} value (the first data entry will remain the same): "
+                f"Enter a unique primary key value for the {pk_sets} value (the first data entry will remain the same): "
             )
-            for attr in pk:
-                data[attr] = new_pk_value.strip()
-            pk_value = tuple(data[attr] for attr in pk)
+            for pk in pk_sets:
+                for attr in pk:
+                    data[attr] = new_pk_value.strip()
+            pk_value = tuple(tuple(data[attr] for attr in pk) for pk in pk_sets)
         pk_values.add(pk_value)
 
     for X, Y in mvds:
@@ -222,13 +220,14 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
                     all_parent_attributes.remove(attr)
                 decomposed_relation.attributes.append(attr)
 
-        # Ensure primary key is included in the decomposed relation
+        # Ensure all primary key components are included in the decomposed relation
         for pk in parent_relation.primary_key:
-            if pk not in decomposed_relation.attributes:
-                decomposed_relation.attributes.append(pk)
+            for attr in pk:
+                if attr not in decomposed_relation.attributes:
+                    decomposed_relation.attributes.append(attr)
         decomposed_relation.primary_key = parent_relation.primary_key[
             :
-        ]  # Set primary key explicitly
+        ]  # Set primary key explicitly as lists of lists
 
         # Assign stored functional dependencies before filtering
         decomposed_relation.functional_dependencies = [fd for fd in stored_fds]
@@ -259,10 +258,9 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
             decomposed_relation.functional_dependencies = [
                 fd
                 for fd in decomposed_relation.functional_dependencies
-                if set(fd.get_x()).issuperset(
-                    set(decomposed_relation.primary_key).union(
-                        *decomposed_relation.candidate_keys
-                    )
+                if any(
+                    set(fd.get_x()).issuperset(set(pk))
+                    for pk in decomposed_relation.primary_key
                 )
             ]
         elif normalization_stage == "4":
@@ -281,15 +279,15 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
         remaining_relation = Relation(name=str(count), attributes=all_parent_attributes)
         remaining_relation.name = count
 
-        # Ensure primary key is included in the decomposed relation
+        # Ensure all primary key components are included in the remaining relation
         for pk in parent_relation.primary_key:
-            if pk not in remaining_relation.attributes:
-                remaining_relation.attributes.append(pk)
+            for attr in pk:
+                if attr not in remaining_relation.attributes:
+                    remaining_relation.attributes.append(attr)
         remaining_relation.primary_key = parent_relation.primary_key[
             :
-        ]  # Set primary key explicitly
+        ]  # Set primary key explicitly as lists of lists
 
-        remaining_relation.primary_key = parent_relation.primary_key[:]
         remaining_relation.foreign_keys = parent_relation.foreign_keys[:]
         remaining_relation.candidate_keys = parent_relation.candidate_keys[:]
 
@@ -316,16 +314,14 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
             remaining_relation.functional_dependencies = (
                 fix_transitive_functional_dependencies(remaining_relation)
             )
-
         elif normalization_stage == "B":
             # BCNF: Remove any dependencies where the determinant is not a superkey
             remaining_relation.functional_dependencies = [
                 fd
                 for fd in remaining_relation.functional_dependencies
-                if set(fd.get_x()).issuperset(
-                    set(remaining_relation.primary_key).union(
-                        *remaining_relation.candidate_keys
-                    )
+                if any(
+                    set(fd.get_x()).issuperset(set(pk))
+                    for pk in remaining_relation.primary_key
                 )
             ]
         elif normalization_stage == "4":
@@ -520,12 +516,17 @@ def detect_2NF_anomalies(relation):
     all_keys = primary_key[:]
     for key in relation.candidate_keys + relation.foreign_keys:
         all_keys.extend(key)
-
     non_keys = [attr for attr in relation.attributes if attr not in all_keys]
     for fd in relation.functional_dependencies:
         X, Y = fd.get_x(), fd.get_y()
-        if set(X).issubset(all_keys) and set(X) != set(primary_key):
-            non_key_Y = [y for y in Y if y in non_keys]
+
+        # Convert inner lists to tuples if X or Y are list of lists
+        X_tuple = tuple(tuple(x) if isinstance(x, list) else x for x in X)
+        Y_tuple = tuple(tuple(y) if isinstance(y, list) else y for y in Y)
+
+        # Rest of the code remains same
+        if set(X_tuple).issubset(all_keys) and set(X_tuple) != set(primary_key):
+            non_key_Y = [y for y in Y_tuple if y in non_keys]
             if non_key_Y:
                 anomalies.append("|".join(non_key_Y))
     return anomalies
@@ -543,6 +544,8 @@ def detect_3NF_anomalies(relation):
         X = fd.get_x()  # Determinant (left side of FD)
         Y = fd.get_y()  # Dependent attributes (right side of FD)
 
+        X = tuple(X)
+        Y = tuple(Y)
         # Check if X is not a superkey (does not fully determine the primary key)
         if not set(primary_key).issubset(set(X)):
             for y in Y:
