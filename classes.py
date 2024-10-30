@@ -4,7 +4,10 @@ class FunctionalDependency:
         self.Y = Y if isinstance(Y, list) else [Y]
 
     def adjust_to_primary_key(self, primary_key):
-        self.X = primary_key
+
+        primary_key_tuple = tuple(tuple(pk) for pk in primary_key)
+
+        self.X = [list(pk) for pk in primary_key_tuple]
 
     def get_x(self):
         return self.X

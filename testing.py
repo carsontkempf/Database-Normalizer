@@ -1,4 +1,5 @@
-import subprocess
+from unittest.mock import patch
+from main import main  # Import the main function from main.py
 
 # Define the inputs, including blank lines for 'Enter' keypresses
 input_data = [
@@ -24,13 +25,8 @@ input_data = [
     "yes",  # Is 'C' atomic?
 ]
 
-# Convert input_data to a single string with newline characters
-input_text = "\n".join(input_data) + "\n"
-
-# Run main.py and pass the input_data as stdin
-process = subprocess.Popen(["python3", "main.py"], stdin=subprocess.PIPE, text=True)
-
-# Send input_text to the process and wait for it to complete
-output, errors = process.communicate(input=input_text)
-
-print("Simulation Complete.")
+# Use patch to simulate input() calls
+with patch("builtins.input") as mock_input:
+    # Configure mock to return each value in input_data on each call to input()
+    mock_input.side_effect = input_data
+    main()  # Run the main function, which will now use mocked inputs

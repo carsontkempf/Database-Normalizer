@@ -17,15 +17,9 @@ def add_foreign_keys(relation, foreign_keys):
             relation.add_foreign_key(foreign_key)
 
 
-def create_relation(name, attributes):
-    return Relation(name, attributes)
-
-
-def build_relation(
+def create_relation(
     name, attributes, primary_key=None, candidate_keys=None, foreign_keys=None
 ):
-    """Build a complete relation by initializing and adding keys."""
-    # Create a new Relation object
     relation = Relation(name, attributes)
 
     # Add the primary key using the Relation instance method
@@ -56,45 +50,23 @@ def input_relation():
     ]  # Ignore empty attributes
 
     primary_key_input = input(
-        "Enter primary key(s) (comma-separated for each key, semicolon-separated for multiple keys), or press Enter for default: "
-    ).strip()
-    if not primary_key_input:
-        primary_key = [[f"{name}_id"]]  # Ensures primary key format as list of lists
-        if (
-            primary_key[0][0] not in attributes
-        ):  # Ensure default primary key is added to attributes
-            attributes.append(primary_key[0][0])
-        print(f"Default primary key '{primary_key[0][0]}' will be used.")
-    else:
-        primary_key = [
-            key_group.strip().split(",")
-            for key_group in primary_key_input.split(";")
-            if key_group.strip()
-        ] or None  # Set to None if no valid input is given
+        "Enter primary keys (keys separated by comma, attributes separated by semicolon): "
+    )
+
+    # Split the input string based on comma and semicolon delimiters to generate a list of primary keys
+    primary_key = [key.strip().split(",") for key in primary_key_input.split(";")]
 
     candidate_keys_input = input(
-        "Enter candidate key(s) (comma-separated for each key, semicolon-separated for multiple keys): "
+        "Enter candidate keys (keys separated by comma, attributes separated by semicolon): "
     ).strip()
-    candidate_keys = (
-        [
-            key.strip().split(",")
-            for key in candidate_keys_input.split(";")
-            if key.strip()
-        ]
-        if candidate_keys_input
-        else None
-    )  # Set to None if input is empty
+    candidate_keys = [key.split(",") for key in candidate_keys_input.split(";")]
 
     foreign_keys_input = input(
-        "Enter foreign key(s) (comma-separated for each key, semicolon-separated for multiple keys): "
+        "Enter foreign keys (keys separated by comma, attributes separated by semicolon): "
     ).strip()
-    foreign_keys = (
-        [key.strip().split(",") for key in foreign_keys_input.split(";") if key.strip()]
-        if foreign_keys_input
-        else None
-    )  # Set to None if input is empty
+    foreign_keys = [key.split(",") for key in foreign_keys_input.split(";")]
 
-    return build_relation(
+    return create_relation(
         name=name,
         attributes=attributes,
         primary_key=primary_key,
