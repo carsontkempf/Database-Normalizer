@@ -9,8 +9,10 @@ mock_inputs = [
     "ssn, home_address",  # Enter primary keys
     "",  # Enter candidate keys
     "",  # Enter foreign keys
+    "",
+    "",
     "ssn",  # First FD determinant attributes
-    "fname, lname",  # First FD dependent attributes
+    "home_address",  # First FD dependent attributes
     "no",  # No more functional dependencies
     "yes",  # Attribute 'fname' atomic check
     "yes",  # Attribute 'lname' atomic check
