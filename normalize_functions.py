@@ -128,53 +128,55 @@ def nested_to_tuple(lst):
     return tuple(nested_to_tuple(i) if isinstance(i, list) else i for i in lst)
 
 
-def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
-    # Flatten attributes into a single list
+def exclude_duplicate_relations(
+    decomposed_relation, decomposed_relation_list, original_attributes
+):
+    # Define allowed attributes dynamically from the parent relation's original attributes
+    allowed_attributes = set(original_attributes)
+
+    # Create a list to hold only the allowed attributes from non-nested values
     flattened_attrs = []
 
-    # Nested loop to handle multiple levels of nesting and gather all attributes as strings
+    # Iterate through each attribute in decomposed_relation, capturing only simple strings that are allowed
     for attr in decomposed_relation.attributes:
-        if isinstance(attr, (list, tuple)):
-            for sub_attr in attr:
-                flattened_attrs.append(str(sub_attr))
-        else:
-            flattened_attrs.append(str(attr))
+        if isinstance(attr, str) and attr in allowed_attributes:
+            flattened_attrs.append(attr)
 
-    # Check for duplicate attributes within the flattened list
-    if len(flattened_attrs) != len(set(flattened_attrs)):
-        print(f"Duplicate attributes detected in {flattened_attrs}, skipping addition.")
-        return decomposed_relation_list  # Skip adding if duplicates are detected
+    # Remove duplicates to ensure only unique allowed attributes remain
+    unique_flattened_attrs = list(set(flattened_attrs))
+
+    # Check if the unique list matches the allowed attributes exactly
+    if set(unique_flattened_attrs) != allowed_attributes:
+        print(
+            f"Duplicate or invalid attributes detected in {unique_flattened_attrs}, skipping addition."
+        )
+        return decomposed_relation_list  # Skip if attributes don't match exactly
 
     # Prepare the unique list of attributes to add
-    sanitized_new_attrs = list(set(flattened_attrs))
     decomposed_relation.attributes = (
-        sanitized_new_attrs  # Assign flattened unique attributes
+        unique_flattened_attrs  # Assign the filtered unique attributes
     )
 
     # Check against existing relations to avoid exact duplicates or subset relations
     to_remove = []
     for existing_relation in decomposed_relation_list:
-        existing_flattened_attrs = []
-
-        for attr in existing_relation.attributes:
-            if isinstance(attr, (list, tuple)):
-                for sub_attr in attr:
-                    existing_flattened_attrs.append(str(sub_attr))
-            else:
-                existing_flattened_attrs.append(str(attr))
+        # Filter existing relation to match only the allowed attributes
+        existing_flattened_attrs = [
+            attr for attr in existing_relation.attributes if attr in allowed_attributes
+        ]
 
         # Compare attribute sets to detect exact duplicates or subsets
-        if set(sanitized_new_attrs) == set(existing_flattened_attrs):
-            print(f"Skipping exact duplicate relation: {sanitized_new_attrs}")
+        if set(unique_flattened_attrs) == set(existing_flattened_attrs):
+            print(f"Skipping exact duplicate relation: {unique_flattened_attrs}")
             return decomposed_relation_list
-        elif set(existing_flattened_attrs).issubset(sanitized_new_attrs):
+        elif set(existing_flattened_attrs).issubset(unique_flattened_attrs):
             print(
-                f"Removing subset relation: {existing_relation.attributes} in favor of {sanitized_new_attrs}"
+                f"Removing subset relation: {existing_relation.attributes} in favor of {unique_flattened_attrs}"
             )
             to_remove.append(existing_relation)
-        elif set(sanitized_new_attrs).issubset(existing_flattened_attrs):
+        elif set(unique_flattened_attrs).issubset(existing_flattened_attrs):
             print(
-                f"Skipping subset relation: {sanitized_new_attrs} since {existing_relation.attributes} already exists"
+                f"Skipping subset relation: {unique_flattened_attrs} since {existing_relation.attributes} already exists"
             )
             return decomposed_relation_list
 
@@ -184,7 +186,7 @@ def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
 
     # Append the unique relation
     decomposed_relation_list.append(decomposed_relation)
-    print(f"Adding new relation: {sanitized_new_attrs}")
+    print(f"Adding new relation: {unique_flattened_attrs}")
 
     return decomposed_relation_list
 
@@ -195,50 +197,46 @@ def exclude_duplicate_relations(decomposed_relation, decomposed_relation_list):
 def filter_functional_dependencies(
     parent_relation, decomposed_relation, normalization_stage, stored_fds
 ):
-    decomposed_relation.primary_key = parent_relation.primary_key[
-        :
-    ]  # Copy primary keys as strings
+    decomposed_relation.primary_key = parent_relation.primary_key[:]
     decomposed_relation.foreign_keys = parent_relation.foreign_keys[:]
     decomposed_relation.candidate_keys = parent_relation.candidate_keys[:]
-    decomposed_relation.functional_dependencies = [fd for fd in stored_fds]
+    decomposed_relation.functional_dependencies = []
 
-    # Apply specific normalization stage logic to filter functional dependencies
-    if normalization_stage == "1":
-        decomposed_relation.functional_dependencies = [
-            fd
-            for fd in decomposed_relation.functional_dependencies
-            if set(fd.get_x()).issubset(decomposed_relation.attributes)
-            and set(fd.get_y()).issubset(decomposed_relation.attributes)
-        ]
-    elif normalization_stage == "2":
-        decomposed_relation.functional_dependencies = [
-            fd
-            for fd in fix_partial_functional_dependencies(
-                parent_relation, decomposed_relation
-            )
-            if set(fd.get_x()).issubset(decomposed_relation.attributes)
-            and set(fd.get_y()).issubset(decomposed_relation.attributes)
-        ]
-    elif normalization_stage == "3":
-        decomposed_relation.functional_dependencies = (
-            fix_transitive_functional_dependencies(decomposed_relation)
-        )
-    elif normalization_stage == "B":
-        decomposed_relation.functional_dependencies = [
-            fd
-            for fd in decomposed_relation.functional_dependencies
-            if any(
-                set(fd.get_x()).issuperset(set(pk.split("|")))
-                for pk in decomposed_relation.primary_key
-            )
-        ]
-    elif normalization_stage == "4":
-        mvds = detect_4NF_anomalies(parent_relation)
-        if mvds:
-            mvds_relations = fix_mvds(parent_relation, mvds)
-            return mvds_relations
+    for fd in stored_fds:
+        # Only add FDs relevant to the decomposed relation’s attributes
+        if set(fd.get_x()).issubset(decomposed_relation.attributes):
+            if normalization_stage == "1":
+                if set(fd.get_y()).issubset(decomposed_relation.attributes):
+                    decomposed_relation.functional_dependencies.append(fd)
+            elif normalization_stage == "2":
+                decomposed_relation.functional_dependencies.extend(
+                    fix_partial_functional_dependencies(
+                        parent_relation, decomposed_relation
+                    )
+                )
+            elif normalization_stage == "3":
+                decomposed_relation.functional_dependencies.extend(
+                    fix_transitive_functional_dependencies(decomposed_relation)
+                )
+            elif normalization_stage == "B":
+                if any(
+                    set(fd.get_x()).issuperset(set(str(pk).split("|")))
+                    for pk in decomposed_relation.primary_key
+                ):
+                    decomposed_relation.functional_dependencies.append(fd)
+            elif normalization_stage == "4":
+                # Detect MVDs for 4NF and include relevant functional dependencies
+                mvds = detect_4NF_anomalies(parent_relation)
+                if mvds:
+                    for X, Y in mvds:
+                        if set(X).issubset(decomposed_relation.attributes) and set(
+                            Y
+                        ).issubset(decomposed_relation.attributes):
+                            decomposed_relation.functional_dependencies.append(
+                                FunctionalDependency(X, Y)
+                            )
 
-    return [decomposed_relation]  # Return as a list for consistency with 4NF
+    return [decomposed_relation]
 
 
 def decompose_relation(parent_relation, anomaly_list, normalization_stage, stored_fds):
@@ -256,16 +254,19 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
         count += 1  # Unique naming for each relation
 
         # Handle anomaly attributes
-        if "|" not in anomaly:
-            if anomaly in all_parent_attributes:
-                all_parent_attributes.remove(anomaly)
-            decomposed_relation.attributes.append(anomaly)
+        if isinstance(anomaly, FunctionalDependency):
+            anomaly_attributes = anomaly.get_x() + anomaly.get_y()
         else:
-            attributes = anomaly.split("|")
-            for attr in attributes:
-                if attr in all_parent_attributes:
-                    all_parent_attributes.remove(attr)
-                decomposed_relation.attributes.append(attr)
+            anomaly_attributes = anomaly
+
+        for attr in anomaly_attributes:
+            if attr in all_parent_attributes:
+                all_parent_attributes.remove(attr)
+            decomposed_relation.attributes.append(attr)
+
+        # Ensure primary keys and functional dependencies are passed down
+        decomposed_relation.primary_key = parent_relation.primary_key
+        decomposed_relation.functional_dependencies = stored_fds[:]  # Pass down FDs
 
         for pk in parent_relation.primary_key:
             pk_str = str(pk)  # Convert pk to a string if it isn't already
@@ -273,27 +274,29 @@ def decompose_relation(parent_relation, anomaly_list, normalization_stage, store
                 if attr not in decomposed_relation.attributes:
                     decomposed_relation.attributes.append(attr)
 
-        # Filter functional dependencies
+        # Filter functional dependencies for the decomposed relation
         filtered_relations = filter_functional_dependencies(
             parent_relation, decomposed_relation, normalization_stage, stored_fds
         )
 
-        # Add filtered relations without duplicates
         for relation in filtered_relations:
             decomposed_relation_list = exclude_duplicate_relations(
-                relation, decomposed_relation_list
+                relation, decomposed_relation_list, parent_relation.attributes
             )
 
     # Handle remaining attributes as a final relation if they exist
     if all_parent_attributes:
         remaining_relation = Relation(name=str(count), attributes=all_parent_attributes)
+        remaining_relation.primary_key = parent_relation.primary_key
+        remaining_relation.functional_dependencies = stored_fds[:]
+
         filtered_relations = filter_functional_dependencies(
             parent_relation, remaining_relation, normalization_stage, stored_fds
         )
 
         for relation in filtered_relations:
             decomposed_relation_list = exclude_duplicate_relations(
-                relation, decomposed_relation_list
+                relation, decomposed_relation_list, parent_relation.attributes
             )
 
     return decomposed_relation_list
@@ -308,10 +311,15 @@ def normalize_1NF(relation):
 
     print_normalization_stage("Final 1NF Relations")
 
+    # Store the original functional dependencies and data
     stored_fds = relation.functional_dependencies[:]
+    stored_data = relation.data[:]
+
     if anomalies:
         list_of_1NF_relations = decompose_relation(relation, anomalies, "1", stored_fds)
         for decomposed_relation in list_of_1NF_relations:
+            decomposed_relation.functional_dependencies = stored_fds[:]
+            decomposed_relation.data = stored_data[:]
             decomposed_relation.print_relation()
         return list_of_1NF_relations
     else:
@@ -326,11 +334,20 @@ def normalize_2NF(relation):
 
     for rel in list_of_1NF_relations:
         anomalies = detect_2NF_anomalies(rel)
+
+        # Store and pass down functional dependencies and data
         stored_fds = rel.functional_dependencies[:]
+        stored_data = rel.data[:]
+
         if anomalies:
             list_of_2NF_relations = decompose_relation(rel, anomalies, "2", stored_fds)
-            final_2NF_relations.extend(list_of_2NF_relations)
+            for decomposed_relation in list_of_2NF_relations:
+                decomposed_relation.functional_dependencies = stored_fds[:]
+                decomposed_relation.data = stored_data[:]
+                final_2NF_relations.append(decomposed_relation)
         else:
+            rel.functional_dependencies = stored_fds[:]
+            rel.data = stored_data[:]
             final_2NF_relations.append(rel)
 
     print_normalization_stage("Final 2NF Relations")
@@ -349,20 +366,22 @@ def normalize_3NF(relation):
 
     for rel in relations:
         anomalies = detect_3NF_anomalies(rel)
+
+        # Store and pass down functional dependencies and data
         stored_fds = rel.functional_dependencies[:]
+        stored_data = rel.data[:]
 
         if anomalies:
             list_of_3NF_relations = decompose_relation(rel, anomalies, "3", stored_fds)
-
             for decomposed_relation in list_of_3NF_relations:
-                decomposed_relation.functional_dependencies = (
-                    fix_transitive_functional_dependencies(decomposed_relation)
-                )
+                decomposed_relation.functional_dependencies = stored_fds[:]
+                decomposed_relation.data = stored_data[:]
                 decomposed_relation.name = relation_counter
                 final_3NF_relations.append(decomposed_relation)
                 relation_counter += 1
         else:
-            rel.functional_dependencies = fix_transitive_functional_dependencies(rel)
+            rel.functional_dependencies = stored_fds[:]
+            rel.data = stored_data[:]
             rel.name = relation_counter
             final_3NF_relations.append(rel)
             relation_counter += 1
@@ -374,7 +393,6 @@ def normalize_3NF(relation):
     return final_3NF_relations
 
 
-# Normalize to BCNF
 def normalize_BCNF(relation):
     print_normalization_stage("BCNF Normalization")
     relations = normalize_3NF(relation)
@@ -383,15 +401,22 @@ def normalize_BCNF(relation):
 
     for rel in relations:
         anomalies = detect_BCNF_anomalies(rel)
+
+        # Store and pass down functional dependencies and data
         stored_fds = rel.functional_dependencies[:]
+        stored_data = rel.data[:]
 
         if anomalies:
             list_of_BCNF_relations = decompose_relation(rel, anomalies, "B", stored_fds)
             for decomposed_relation in list_of_BCNF_relations:
+                decomposed_relation.functional_dependencies = stored_fds[:]
+                decomposed_relation.data = stored_data[:]
                 decomposed_relation.name = relation_counter
                 final_BCNF_relations.append(decomposed_relation)
                 relation_counter += 1
         else:
+            rel.functional_dependencies = stored_fds[:]
+            rel.data = stored_data[:]
             rel.name = relation_counter
             final_BCNF_relations.append(rel)
             relation_counter += 1
@@ -404,7 +429,6 @@ def normalize_BCNF(relation):
     return final_BCNF_relations
 
 
-# Normalize to 4NF
 def normalize_4NF(relation):
     print_normalization_stage("4NF Normalization")
     bcnf_relations = normalize_BCNF(relation)
@@ -413,15 +437,22 @@ def normalize_4NF(relation):
 
     for bcnf_relation in bcnf_relations:
         mvds = detect_4NF_anomalies(bcnf_relation)
+
+        # Store and pass down functional dependencies and data
         stored_fds = bcnf_relation.functional_dependencies[:]
+        stored_data = bcnf_relation.data[:]
 
         if mvds:
             decomposed_relations_4NF = fix_mvds(bcnf_relation, mvds)
             for rel in decomposed_relations_4NF:
+                rel.functional_dependencies = stored_fds[:]
+                rel.data = stored_data[:]
                 rel.name = relation_counter
                 final_4NF_relations.append(rel)
                 relation_counter += 1
         else:
+            bcnf_relation.functional_dependencies = stored_fds[:]
+            bcnf_relation.data = stored_data[:]
             bcnf_relation.name = relation_counter
             final_4NF_relations.append(bcnf_relation)
             relation_counter += 1
@@ -434,7 +465,6 @@ def normalize_4NF(relation):
     return final_4NF_relations
 
 
-# Normalize to 5NF
 def normalize_5NF(relation):
     print_normalization_stage("5NF Normalization")
     relations = normalize_4NF(relation)
@@ -443,12 +473,25 @@ def normalize_5NF(relation):
 
     for rel in relations:
         anomalies = detect_5NF_anomalies(rel)
+
+        # Store and pass down functional dependencies and data
         stored_fds = rel.functional_dependencies[:]
+        stored_data = rel.data[:]
+
         if anomalies:
             list_of_5NF_relations = decompose_relation(rel, anomalies, "5", stored_fds)
-            final_5NF_relations.extend(list_of_5NF_relations)
+            for decomposed_relation in list_of_5NF_relations:
+                decomposed_relation.functional_dependencies = stored_fds[:]
+                decomposed_relation.data = stored_data[:]
+                decomposed_relation.name = relation_counter
+                final_5NF_relations.append(decomposed_relation)
+                relation_counter += 1
         else:
+            rel.functional_dependencies = stored_fds[:]
+            rel.data = stored_data[:]
+            rel.name = relation_counter
             final_5NF_relations.append(rel)
+            relation_counter += 1
 
     print_normalization_stage("Final 5NF Relations")
     for final_relation in final_5NF_relations:
@@ -527,8 +570,7 @@ def detect_3NF_anomalies(relation):
 
 def detect_BCNF_anomalies(relation):
     anomalies = []
-    primary_key_sets = [set(pk.split("|")) for pk in relation.primary_key]
-
+    primary_key_sets = [set(str(pk).split("|")) for pk in relation.primary_key]
     for fd in relation.functional_dependencies:
         fd_x = set(fd.get_x())
         if not any(fd_x.issuperset(pk) for pk in primary_key_sets):
@@ -538,8 +580,7 @@ def detect_BCNF_anomalies(relation):
 
 def detect_4NF_anomalies(relation):
     mvds = []
-    primary_key_sets = [set(pk.split("|")) for pk in relation.primary_key]
-
+    primary_key_sets = [set(str(pk).split("|")) for pk in relation.primary_key]
     for fd in relation.functional_dependencies:
         X, Y = fd.get_x(), fd.get_y()
         if set(X) in primary_key_sets:
