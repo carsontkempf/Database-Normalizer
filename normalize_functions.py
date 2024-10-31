@@ -220,37 +220,63 @@ def determinants_equal_superkey(relation):
 
 
 def fix_mvds(relation, mvds):
-    new_relations = []
-    primary_key = relation.primary_key  # Keep as list of strings
-
+    relations_in_4NF = []
+    primary_key = relation.primary_key  # Primary key attributes as list of strings
     pk_values = set()
+
+    # Convert primary key values to strings and ensure unique primary key entries
     for data in relation.data:
-        pk_value = tuple(data[attr] for attr in primary_key)
-        while pk_value in pk_values:
+        pk_value = tuple(str(data[attr]) for attr in primary_key)
+        print(f"Checking primary key value: {pk_value}")
+
+        if pk_value in pk_values:
             print(f"Duplicate primary key value detected: {pk_value}")
             new_pk_value = input(
-                f"Enter a unique primary key value for {primary_key}: "
+                "Enter a unique primary key value for the duplicate entry in the secondary relation: "
             )
-            for attr in primary_key:
-                data[attr] = new_pk_value.strip()
-            pk_value = tuple(data[attr] for attr in primary_key)
+            data[primary_key[-1]] = (
+                new_pk_value.strip()
+            )  # Modify the last attribute in primary key for uniqueness
+            pk_value = tuple(str(data[attr]) for attr in primary_key)
+            print(f"Updated primary key value to: {pk_value}")
+
         pk_values.add(pk_value)
 
+    # Process each MVD anomaly to create new relations
     for X, Y in mvds:
-        attributes = X + Y
-        new_relation = Relation(
-            name=f"{relation.name}_{'_'.join(Y)}", attributes=attributes
+        non_pk_attributes = [
+            attr for attr in relation.attributes if attr not in primary_key
+        ]
+
+        # Relation 1 with X + first non-primary key attribute
+        table1 = Relation(
+            name=f"{relation.name}_{non_pk_attributes[0]}",
+            attributes=X + [non_pk_attributes[0]],
         )
-        new_relation.primary_key = X
-        new_relation.functional_dependencies = [FunctionalDependency(X, Y)]
+        # Relation 2 with X + remaining non-primary key attributes
+        table2 = Relation(
+            name=f"{relation.name}_{non_pk_attributes[1]}",
+            attributes=X + [non_pk_attributes[1]],
+        )
 
+        # Populate table1 and table2 with tuples, converting values to strings
         for data in relation.data:
-            new_data = {attr: data[attr] for attr in attributes}
-            new_relation.add_tuple(new_data)
+            data_table1 = {attr: str(data[attr]) for attr in table1.attributes}
+            data_table2 = {attr: str(data[attr]) for attr in table2.attributes}
+            print(f"Adding data to table1: {data_table1}")
+            print(f"Adding data to table2: {data_table2}")
+            table1.add_tuple(data_table1)
+            table2.add_tuple(data_table2)
 
-        new_relations.append(new_relation)
+        # Assign functional dependencies to the new relations
+        table1.add_functional_dependency(X, [non_pk_attributes[0]])
+        table2.add_functional_dependency(X, [non_pk_attributes[1]])
 
-    return new_relations
+        # Append the two new relations to the list for 4NF
+        relations_in_4NF.append(table1)
+        relations_in_4NF.append(table2)
+
+    return relations_in_4NF
 
 
 def nested_to_tuple(lst):
@@ -449,6 +475,7 @@ def normalize_BCNF(relation):
     for count, final_relation in enumerate(final_BCNF_relations, start=1):
         final_relation.name = str(count)
         final_relation.print_relation()
+        print_data(final_relation)  # Print data values for each BCNF relation
 
     return final_BCNF_relations
 
@@ -471,11 +498,6 @@ def normalize_4NF(relation):
                 final_4NF_relations.append(rel)
         else:
             final_4NF_relations.append(bcnf_relation)
-
-        if mvds:
-            print(f"Detected multivalued dependencies: {mvds}")
-        else:
-            print("No anomalies detected for 4NF.")
 
     print_normalization_stage("Relations in 4NF")
     for count, final_relation in enumerate(final_4NF_relations, start=1):
@@ -622,14 +644,58 @@ def detect_BCNF_anomalies(relation):
 
 def detect_4NF_anomalies(relation):
     mvds = []
-    primary_key_sets = [set(str(pk).split("|")) for pk in relation.primary_key]
-    for fd in relation.functional_dependencies:
-        X, Y = fd.get_x(), fd.get_y()
-        if set(X) in primary_key_sets:
-            x_values = {tuple(data[attr] for attr in X) for data in relation.data}
-            y_values = {tuple(data[attr] for attr in Y) for data in relation.data}
-            if len(y_values) > 1:
-                mvds.append((X, Y))
+
+    # Convert the primary key to a string and remove extraneous characters for comparison
+    primary_key_attribute = str(relation.primary_key[0]).strip("[]'\" ,")
+
+    # Find the position of the primary key attribute by iterating through relation attributes
+    attribute_positions = list(
+        relation.data[0].keys()
+    )  # Assumes data entries are dictionaries
+    primary_key_position = None
+
+    for count, attr in enumerate(attribute_positions):
+        current_attr = str(attr).strip("[]'\" ,")
+
+        if primary_key_attribute == current_attr:
+            primary_key_position = (
+                current_attr  # Store attribute name directly for dictionary access
+            )
+
+            break
+
+    # Confirm primary key position (attribute name) was found
+    if primary_key_position is None:
+
+        return []
+
+    # Detect duplicates in primary key values
+    unique_keys = set()
+
+    for i, data in enumerate(relation.data):
+        primary_key_value = str(data[primary_key_position]).strip("[]'\" ,")
+
+        # Check for duplicates in primary key values
+        if primary_key_value in unique_keys:
+            print_divider()
+            print(
+                f"Anomaly detected in tuple {i} with primary key value = '{primary_key_value}'"
+            )
+            new_value = str(
+                input(
+                    f"Enter a unique value for the primary key attribute '{primary_key_position}': "
+                )
+            ).strip("[]'\" ,")
+            print_divider()
+
+            # Update the primary key value in the data instance at the correct attribute
+            data[primary_key_position] = new_value
+        else:
+            unique_keys.add(primary_key_value)
+
+    for idx, data in enumerate(relation.data, start=1):
+        print(f"Tuple {idx}: {data}")
+
     return mvds
 
 

@@ -86,6 +86,7 @@ input_data_4NF = [
     "yes",  # Confirm 'fname' is atomic
     "yes",  # Confirm 'lname' is atomic
     "yes",  # Is 'student_id' atomic?
+    "2",
 ]
 
 input_data_5NF = [
