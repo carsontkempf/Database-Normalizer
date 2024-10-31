@@ -279,65 +279,47 @@ def fix_mvds(relation, mvds):
     return relations_in_4NF
 
 
-def nested_to_tuple(lst):
-    # Recursively convert lists within lists to tuples
-    return tuple(nested_to_tuple(i) if isinstance(i, list) else i for i in lst)
+def ensure_join_dependencies(relation, anomalies):
+    new_relations = []
+    decomposed_relations = {}
 
+    for anomaly in anomalies:
+        determinant, dependent = anomaly.get_x(), anomaly.get_y()
 
-def exclude_duplicate_relations(
-    decomposed_relation, decomposed_relation_list, original_attributes
-):
-    allowed_attributes = set(original_attributes)
-    unflattened_attributes = []
-
-    # Collect attributes that are allowed based on the parent relation
-    for attr in decomposed_relation.attributes:
-        if isinstance(attr, str) and attr in allowed_attributes:
-            unflattened_attributes.append(attr)
-
-    unique_flattened_attrs = remove_duplicate_attributes(unflattened_attributes)
-
-    # Check if the unique list matches the allowed attributes exactly
-    if set(unique_flattened_attrs) != allowed_attributes:
-
-        return decomposed_relation_list  # Skip if attributes don't match exactly
-
-    # Prepare the unique list of attributes to add
-    decomposed_relation.attributes = (
-        unique_flattened_attrs  # Assign the filtered unique attributes
-    )
-
-    # Check against existing relations to avoid exact duplicates or subset relations
-    to_remove = []
-    for existing_relation in decomposed_relation_list:
-        # Filter existing relation to match only the allowed attributes
-        existing_flattened_attrs = [
-            attr for attr in existing_relation.attributes if attr in allowed_attributes
-        ]
-
-        # Compare attribute sets to detect exact duplicates or subsets
-        if set(unique_flattened_attrs) == set(existing_flattened_attrs):
-            print(f"Skipping exact duplicate relation: {unique_flattened_attrs}")
-            return decomposed_relation_list
-        elif set(existing_flattened_attrs).issubset(unique_flattened_attrs):
-            print(
-                f"Removing subset relation: {existing_relation.attributes} in favor of {unique_flattened_attrs}"
+        # Check if a new relation with this determinant set already exists
+        determinant_key = tuple(determinant)
+        if determinant_key not in decomposed_relations:
+            # Create a new relation based on the determinant
+            new_relation = Relation(
+                name=f"{relation.name}_{'_'.join(determinant)}",
+                attributes=determinant + dependent,
             )
-            to_remove.append(existing_relation)
-        elif set(unique_flattened_attrs).issubset(existing_flattened_attrs):
-            print(
-                f"Skipping subset relation: {unique_flattened_attrs} since {existing_relation.attributes} already exists"
-            )
-            return decomposed_relation_list
+            new_relation.add_primary_key(determinant)
+            new_relation.add_foreign_key(determinant, relation.name)
+            decomposed_relations[determinant_key] = new_relation
+            new_relations.append(new_relation)
 
-    # Remove identified duplicates or subsets
-    for relation in to_remove:
-        decomposed_relation_list.remove(relation)
+        # Add data tuples to the new relation based on the dependency
+        for data in relation.data:
+            new_tuple = {attr: data[attr] for attr in determinant + dependent}
+            decomposed_relations[determinant_key].add_tuple(new_tuple)
 
-    # Append the unique relation
-    decomposed_relation_list.append(decomposed_relation)
+    # Handle any remaining attributes that do not belong to the newly created relations
+    remaining_attributes = [
+        attr
+        for attr in relation.attributes
+        if attr not in {attr for det in anomalies for attr in det.get_y()}
+    ]
+    if remaining_attributes:
+        final_relation = Relation(
+            name=f"{relation.name}_remaining",
+            attributes=remaining_attributes,
+        )
+        final_relation.add_primary_key(relation.primary_key)
+        final_relation.data = relation.data[:]
+        new_relations.append(final_relation)
 
-    return decomposed_relation_list
+    return new_relations
 
 
 # --------------------------------- Normalize Functions ---------------------------------
@@ -514,24 +496,32 @@ def normalize_5NF(relation):
     final_5NF_relations = []
 
     for rel in relations:
-        anomalies = detect_5NF_anomalies(rel)
-        stored_fds = rel.functional_dependencies[:]
-        stored_data = rel.data[:]
+        keys = rel.primary_key  # Assuming primary_key holds the keys
+        # check if rel.data is a dictionary
+        if isinstance(rel.data, dict):
+            anomalies = detect_5NF_anomalies(
+                rel.data, keys
+            )  # Pass relation data and keys to detect anomalies
+            stored_fds = rel.functional_dependencies[:]  # Store FDs for reference
+            stored_data = rel.data[:]  # Store data for reference
 
-        if anomalies:
-            list_of_5NF_relations = decompose_relation(rel, anomalies, "5", stored_fds)
-            for decomposed_relation in list_of_5NF_relations:
-                decomposed_relation.functional_dependencies = stored_fds[:]
-                decomposed_relation.data = stored_data[:]
-                final_5NF_relations.append(decomposed_relation)
+            if anomalies:
+                # Call ensure_join_dependencies instead of decompose_relation
+                list_of_5NF_relations = ensure_join_dependencies(rel, anomalies)
+                for decomposed_relation in list_of_5NF_relations:
+                    decomposed_relation.functional_dependencies = stored_fds[:]
+                    decomposed_relation.data = stored_data[:]
+                    final_5NF_relations.append(decomposed_relation)
+            else:
+                final_5NF_relations.append(rel)
         else:
-            final_5NF_relations.append(rel)
+            print("rel.data is not a dictionary!")
 
     print_normalization_stage("Relations in 5NF")
     for count, final_relation in enumerate(final_5NF_relations, start=1):
-        final_relation.name = str(count)
-        final_relation.print_relation()
-        print_data(final_relation)
+        final_relation.name = f"Relation_{count}"  # Assign unique name
+        final_relation.print_relation()  # Print relation details
+        print_data(final_relation)  # Print data in relation
 
     return final_5NF_relations
 
@@ -633,12 +623,19 @@ def detect_3NF_anomalies(relation):
 
 def detect_BCNF_anomalies(relation):
     anomalies = []
-    primary_key_sets = [set(str(pk).split("|")) for pk in relation.primary_key]
+    # Generate sets for each composite primary key
+    primary_key_sets = [
+        set(pk) if isinstance(pk, list) else {pk} for pk in relation.primary_key
+    ]
+
     for fd in relation.functional_dependencies:
-        fd_x_raw = fd.get_x()  # Get the raw value
-        fd_x = set(tuple(x) if isinstance(x, list) else x for x in fd_x_raw)
-        if not any(fd_x.issuperset(pk) for pk in primary_key_sets):
+        determinant_set = set(fd.get_x())  # Determinant attributes as a set
+
+        # Check if determinant_set is a superset of any primary key subset, indicating it's a superkey
+        if not any(determinant_set.issuperset(pk_set) for pk_set in primary_key_sets):
+            # If no primary key subset is fully contained in determinant_set, record as anomaly
             anomalies.append(fd)
+
     return anomalies
 
 
@@ -697,17 +694,3 @@ def detect_4NF_anomalies(relation):
         print(f"Tuple {idx}: {data}")
 
     return mvds
-
-
-def has_independent_values(attribute, relation):
-    independent_values = set()
-    if attribute not in relation.attributes:
-        return False
-
-    try:
-        for row in relation.data:
-            independent_values.add(row[relation.attributes.index(attribute)])
-    except KeyError:
-        return False
-
-    return len(independent_values) > 1
