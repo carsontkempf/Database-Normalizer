@@ -279,46 +279,90 @@ def fix_mvds(relation, mvds):
     return relations_in_4NF
 
 
+def add_functional_dependency_if_pk_equal(relation, primary_key, X, Y):
+    # Check if primary_key and X are equal in length and each corresponding position matches
+    if len(primary_key) == len(X) and all(pk == x for pk, x in zip(primary_key, X)):
+        relation.add_functional_dependency(X, Y)
+
+
 def ensure_join_dependencies(relation, anomalies):
     new_relations = []
     decomposed_relations = {}
 
-    for anomaly in anomalies:
-        determinant, dependent = anomaly.get_x(), anomaly.get_y()
+    # Loop through each anomaly to decompose
+    for anomaly_index, anomaly in enumerate(anomalies, start=1):
+        determinant, dependent = anomaly
+        print(
+            f"Debug: Processing anomaly {anomaly_index} with determinant {determinant} and dependent {dependent}"
+        )
 
-        # Check if a new relation with this determinant set already exists
         determinant_key = tuple(determinant)
+
+        # Check if a relation with this determinant already exists
         if determinant_key not in decomposed_relations:
-            # Create a new relation based on the determinant
-            new_relation = Relation(
-                name=f"{relation.name}_{'_'.join(determinant)}",
-                attributes=determinant + dependent,
-            )
-            new_relation.add_primary_key(determinant)
-            new_relation.add_foreign_key(determinant, relation.name)
-            decomposed_relations[determinant_key] = new_relation
-            new_relations.append(new_relation)
+            try:
+                new_relation = Relation(
+                    name=f"{relation.name}_{'_'.join(determinant)}",
+                    attributes=determinant + dependent,
+                )
+                new_relation.add_primary_key(determinant)
+                print(
+                    f"Debug: Created new relation {new_relation.name} with attributes {new_relation.attributes}"
+                )
 
-        # Add data tuples to the new relation based on the dependency
+                # Attempting to add foreign key - confirming if method allows
+                try:
+                    new_relation.add_foreign_key(determinant, relation.name)
+                    print(
+                        f"Debug: Foreign key {determinant} added to {new_relation.name} referencing {relation.name}"
+                    )
+                except TypeError as e:
+                    print("Error adding foreign key:", e)
+
+                # Store and append to relations
+                decomposed_relations[determinant_key] = new_relation
+                new_relations.append(new_relation)
+            except Exception as e:
+                print(f"Error creating relation for anomaly {anomaly_index}: {e}")
+
+        # Populating the new relation with tuples
         for data in relation.data:
-            new_tuple = {attr: data[attr] for attr in determinant + dependent}
-            decomposed_relations[determinant_key].add_tuple(new_tuple)
+            try:
+                new_tuple = {attr: data[attr] for attr in determinant + dependent}
+                decomposed_relations[determinant_key].add_tuple(new_tuple)
+                print(
+                    f"Debug: Added tuple {new_tuple} to {decomposed_relations[determinant_key].name}"
+                )
+            except KeyError as e:
+                print(
+                    f"Error adding data tuple for {determinant_key}: Missing attribute {e}"
+                )
+            except Exception as e:
+                print(
+                    f"Unexpected error when adding data tuple for {determinant_key}: {e}"
+                )
 
-    # Handle any remaining attributes that do not belong to the newly created relations
+    # Handle attributes not included in the decomposed relations
     remaining_attributes = [
         attr
         for attr in relation.attributes
-        if attr not in {attr for det in anomalies for attr in det.get_y()}
+        if all(attr not in det[1] for det in anomalies)
     ]
     if remaining_attributes:
-        final_relation = Relation(
-            name=f"{relation.name}_remaining",
-            attributes=remaining_attributes,
-        )
-        final_relation.add_primary_key(relation.primary_key)
-        final_relation.data = relation.data[:]
-        new_relations.append(final_relation)
+        try:
+            final_relation = Relation(
+                name=f"{relation.name}_remaining", attributes=remaining_attributes
+            )
+            final_relation.add_primary_key(relation.primary_key)
+            final_relation.data = relation.data[:]
+            print(
+                f"Debug: Created remaining relation {final_relation.name} with attributes {final_relation.attributes}"
+            )
+            new_relations.append(final_relation)
+        except Exception as e:
+            print(f"Error creating remaining relation: {e}")
 
+    print("Debug: Completed ensure_join_dependencies")
     return new_relations
 
 
@@ -497,29 +541,35 @@ def normalize_5NF(relation):
 
     for rel in relations:
         keys = rel.primary_key  # Assuming primary_key holds the keys
-        # check if rel.data is a dictionary
-        if isinstance(rel.data, dict):
-            anomalies = detect_5NF_anomalies(
-                rel.data, keys
-            )  # Pass relation data and keys to detect anomalies
+
+        # Check if rel.data is a list of dictionaries
+        if isinstance(rel.data, list) and all(isinstance(d, dict) for d in rel.data):
+            # Detect 5NF anomalies
+            anomalies = detect_5NF_anomalies(rel)
+
             stored_fds = rel.functional_dependencies[:]  # Store FDs for reference
             stored_data = rel.data[:]  # Store data for reference
 
             if anomalies:
-                # Call ensure_join_dependencies instead of decompose_relation
+
                 list_of_5NF_relations = ensure_join_dependencies(rel, anomalies)
                 for decomposed_relation in list_of_5NF_relations:
-                    decomposed_relation.functional_dependencies = stored_fds[:]
+                    # Instead of adding directly, use the new function
+                    for fd in stored_fds:
+                        add_functional_dependency_if_pk_equal(
+                            decomposed_relation,
+                            decomposed_relation.primary_key,
+                            fd.get_x(),
+                            fd.get_y(),
+                        )
                     decomposed_relation.data = stored_data[:]
                     final_5NF_relations.append(decomposed_relation)
             else:
                 final_5NF_relations.append(rel)
-        else:
-            print("rel.data is not a dictionary!")
 
     print_normalization_stage("Relations in 5NF")
     for count, final_relation in enumerate(final_5NF_relations, start=1):
-        final_relation.name = f"Relation_{count}"  # Assign unique name
+        final_relation.name = count
         final_relation.print_relation()  # Print relation details
         print_data(final_relation)  # Print data in relation
 
@@ -694,3 +744,80 @@ def detect_4NF_anomalies(relation):
         print(f"Tuple {idx}: {data}")
 
     return mvds
+
+
+# --------------------------------- Detect 5NF Anomaly Functions ---------------------------------
+
+
+def detect_5NF_anomalies(relation):
+    join_dependencies = []
+    attributes = relation.attributes
+
+    for i in range(len(attributes)):
+        X = attributes[:i] + attributes[i + 1 :]
+        Y = [attributes[i]]
+
+        if check_join_dependency(relation, X, Y):
+            join_dependencies.append((X, Y))
+
+    return join_dependencies
+
+
+def check_join_dependency(relation, X, Y):
+    for data in relation.data:
+        if all(attr in data for attr in X + Y):
+            return True
+    return False
+
+
+def convert_data_to_dict(data, attributes):
+    converted_data = []
+    for row in data:
+        row_dict = {}
+        for attribute in attributes:
+            row_dict[attribute] = str(row.get(attribute, "")).strip("[]'\" ,")
+        converted_data.append(row_dict)
+    return converted_data
+
+
+def decompose_to_5NF(relation, join_dependencies):
+    decomposed_relations = []
+
+    for X, Y in join_dependencies:
+        new_relation1 = Relation(name=f"{relation.name}_X", attributes=X)
+        new_relation2 = Relation(name=f"{relation.name}_Y", attributes=Y)
+
+        new_relation1_data = []
+        new_relation2_data = []
+
+        for data in relation.data:
+            tuple_X = {attr: str(data[attr]).strip("[]'\" ,") for attr in X}
+            tuple_Y = {attr: str(data[attr]).strip("[]'\" ,") for attr in Y}
+
+            if tuple_X not in new_relation1_data:
+                new_relation1_data.append(tuple_X)
+            if tuple_Y not in new_relation2_data:
+                new_relation2_data.append(tuple_Y)
+
+        new_relation1.data = new_relation1_data
+        new_relation2.data = new_relation2_data
+
+        decomposed_relations.append(new_relation1)
+        decomposed_relations.append(new_relation2)
+
+    remaining_attributes = [
+        attr
+        for attr in relation.attributes
+        if not any(attr in dep for dep in join_dependencies)
+    ]
+
+    if remaining_attributes:
+        remaining_relation = Relation(
+            name=f"{relation.name}_remaining", attributes=remaining_attributes
+        )
+        remaining_relation.data = convert_data_to_dict(
+            relation.data, remaining_attributes
+        )
+        decomposed_relations.append(remaining_relation)
+
+    return decomposed_relations
