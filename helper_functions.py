@@ -59,6 +59,7 @@ def input_relation():
         attributes.append(
             f"{name}_id"
         )  # Ensure the primary key attribute is in attributes list
+
     else:
         # Split the input string based on comma and semicolon delimiters to generate a list of primary keys
         primary_key = [key.strip().split(",") for key in primary_key_input.split(";")]

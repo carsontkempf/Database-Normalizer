@@ -52,7 +52,20 @@ class Relation:
             self.attributes.append(attribute)
 
     def add_functional_dependency(self, X, Y):
-        self.functional_dependencies.append(FunctionalDependency(X, Y))
+        # Flatten X and Y into one list
+        all_attributes = [
+            attr
+            for sublist in (X, Y)
+            for attr in (sublist if isinstance(sublist, list) else [sublist])
+        ]
+
+        # Check if all attributes in X and Y are in the relation's attributes
+        if all(attr in self.attributes for attr in all_attributes):
+            self.functional_dependencies.append(FunctionalDependency(X, Y))
+        else:
+            missing_attrs = [
+                attr for attr in all_attributes if attr not in self.attributes
+            ]
 
     def add_tuple(self, data_instance):
         if len(data_instance) != len(self.attributes):
