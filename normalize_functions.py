@@ -100,30 +100,43 @@ def fix_non_atomic_attributes(parent_relation, anomalies):
     return new_relations
 
 
-def fix_partial_functional_dependencies(parent_relation, decomposed_relation):
-    adjusted_fds = []
+def fix_partial_functional_dependencies(parent_relation, anomalies):
+    # Initialize a list to store the 2NF relations
+    relations_in_2NF = []
 
-    for fd in parent_relation.functional_dependencies:
-        fd_x = set(fd.get_x())
-        fd_y = set(fd.get_y())
-        primary_key_sets = [set(pk.split("|")) for pk in parent_relation.primary_key]
+    # Collect all attributes of the parent relation for reference
+    all_parent_attributes = [str(attr).strip() for attr in parent_relation.attributes]
 
-        # Check if the X attributes (determinants) are in the decomposed relation
-        if fd_x.issubset(decomposed_relation.attributes):
-            # Ensure all Y attributes (dependents) are added to the decomposed relation
-            for y_attr in fd_y:
-                if y_attr not in decomposed_relation.attributes:
-                    decomposed_relation.attributes.append(y_attr)
+    # Create a new relation for each anomaly
+    for anomaly in anomalies:
+        # Initialize a new relation with the primary key and the anomaly as attributes
+        new_relation = Relation(
+            name=f"{parent_relation.name}_{anomaly}",
+            attributes=parent_relation.primary_key[:],  # Copy primary key
+        )
 
-            # Check if the FD is a partial dependency
-            if any(fd_x.issubset(pk) and fd_x != pk for pk in primary_key_sets):
-                print(f"Partial dependency detected: {fd_x} -> {fd_y}")
-                adjusted_fd = FunctionalDependency(list(fd_x), list(fd_y))
-                adjusted_fds.append(adjusted_fd)
-            else:
-                adjusted_fds.append(fd)
+        # Add the anomaly attribute to the new relation
+        new_relation.attributes.append(anomaly)
+        new_relation.add_primary_key(parent_relation.primary_key)
 
-    return adjusted_fds
+        new_relation.add_functional_dependency(parent_relation.primary_key, anomaly)
+
+        relations_in_2NF.append(new_relation)
+
+        # Remove the anomaly attribute from all_parent_attributes to prevent duplication
+        if anomaly in all_parent_attributes:
+            all_parent_attributes.remove(anomaly)
+
+    # If there are remaining attributes, add them to a final relation
+    if all_parent_attributes:
+        new_relation = Relation(
+            name=f"{parent_relation.name}_remaining",
+            attributes=all_parent_attributes,
+        )
+        new_relation.add_primary_key(parent_relation.primary_key)
+        relations_in_2NF.append(new_relation)
+
+    return relations_in_2NF
 
 
 def fix_transitive_functional_dependencies(relation):
@@ -373,6 +386,8 @@ def normalize_1NF(relation):
     # Print detected non-atomic attributes if any
     if anomalies:
         print(f"Detected non-atomic attribute(s): {', '.join(anomalies)}")
+    else:
+        print("No non-atomic attributes found.")
 
     print_normalization_stage("Relations in 1NF")
 
@@ -406,23 +421,30 @@ def normalize_2NF(relation):
 
     for rel in list_of_1NF_relations:
         anomalies = detect_2NF_anomalies(rel)
-        stored_fds = rel.functional_dependencies[:]
-        stored_data = rel.data[:]
+        stored_data = rel.data[:]  # Store original data for each relation
 
         if anomalies:
-            list_of_2NF_relations = decompose_relation(rel, anomalies, "2", stored_fds)
-            for decomposed_relation in list_of_2NF_relations:
-                decomposed_relation.functional_dependencies = stored_fds[:]
-                decomposed_relation.data = stored_data[:]
-                final_2NF_relations.append(decomposed_relation)
+            print_normalization_stage(
+                f"Detected partial functional dependencies: {', '.join(anomalies)}"
+            )
+
+            # Call fix_partial_functional_dependencies, which returns multiple relations
+            new_relations = fix_partial_functional_dependencies(rel, anomalies)
+
+            # For each new relation, assign the stored data and add it to final_2NF_relations
+            for new_relation in new_relations:
+                new_relation.data = stored_data[
+                    :
+                ]  # Copy stored data to each new relation
+                final_2NF_relations.append(new_relation)
         else:
+            print("No partial functional dependencies found.")
             final_2NF_relations.append(rel)
 
     print_normalization_stage("Relations in 2NF")
     for count, final_relation in enumerate(final_2NF_relations, start=1):
         final_relation.name = str(count)
         final_relation.print_relation()
-        print_data(final_relation)
 
     return final_2NF_relations
 
@@ -436,6 +458,10 @@ def normalize_3NF(relation):
         anomalies = detect_3NF_anomalies(rel)
         stored_fds = rel.functional_dependencies[:]
         stored_data = rel.data[:]
+        if anomalies:
+            print(f"Detected transitive dependencies: {', '.join(anomalies)}")
+        else:
+            print("No anomalies detected for 3NF.")
 
         if anomalies:
             list_of_3NF_relations = decompose_relation(rel, anomalies, "3", stored_fds)
@@ -462,6 +488,10 @@ def normalize_BCNF(relation):
 
     for rel in relations:
         anomalies = detect_BCNF_anomalies(rel)
+        if anomalies:
+            print(f"Detected BCNF anomalies: {', '.join(str(a) for a in anomalies)}")
+        else:
+            print("All determinants are equal to a primary key.")
         stored_fds = rel.functional_dependencies[:]
         stored_data = rel.data[:]
 
@@ -501,6 +531,11 @@ def normalize_4NF(relation):
                 final_4NF_relations.append(rel)
         else:
             final_4NF_relations.append(bcnf_relation)
+
+        if mvds:
+            print(f"Detected multivalued dependencies: {mvds}")
+        else:
+            print("No anomalies detected for 4NF.")
 
     print_normalization_stage("Relations in 4NF")
     for count, final_relation in enumerate(final_4NF_relations, start=1):
@@ -553,21 +588,38 @@ def detect_1NF_anomalies(relation):
 
 def detect_2NF_anomalies(relation):
     anomalies = []
-    primary_key = relation.primary_key
-    all_keys = primary_key[:]
-    for key in relation.candidate_keys + relation.foreign_keys:
-        all_keys.extend(key)
 
+    # Convert each element in primary_key to a set of cleaned, individual components
+    primary_key = set()
+    for pk in relation.primary_key:
+        # Split composite keys and clean whitespace
+        if isinstance(pk, list):
+            primary_key.update(str(attr).strip() for attr in pk)
+        else:
+            primary_key.add(str(pk).strip())
+
+    # Collect all key attributes (primary, candidate, and foreign keys)
+    all_keys = primary_key.union(
+        *[
+            set(str(attr).strip() for attr in (key if isinstance(key, list) else [key]))
+            for key in relation.candidate_keys + relation.foreign_keys
+        ]
+    )
+
+    # Identify non-key attributes
     non_keys = [attr for attr in relation.attributes if attr not in all_keys]
+
+    # Check each functional dependency for 2NF anomalies
     for fd in relation.functional_dependencies:
         X, Y = fd.get_x(), fd.get_y()
-        for pk in primary_key:
-            if isinstance(pk, list):
-                pk = "|".join(pk)
-            if set(X).issubset(set(pk.split("|"))) and set(X) != set(pk.split("|")):
-                non_key_Y = [y for y in Y if y in non_keys]
-                if non_key_Y:
-                    anomalies.append("|".join(non_key_Y))
+        X_set = set(str(attr).strip() for attr in X)  # Convert X to a cleaned set
+
+        # Check if X is a proper subset of the primary key
+        if X_set.issubset(primary_key) and X_set != primary_key:
+            # Ensure all elements in Y are non-key attributes
+            if all(y in non_keys for y in Y):
+                anomalies.extend(Y)  # Add the dependent attributes causing anomalies
+
     return anomalies
 
 
