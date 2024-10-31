@@ -11,9 +11,9 @@ input_data_1NF = [
     "",
     "yes",
     "yes",
-    "no",
-    "no",
-    "yes",  # Is 'student_id' atomic?
+    "no",  # no = the attribute is non-atomic and needs decomposed to a new relation
+    "no",  # no = the attribute is non-atomic and needs decomposed to a new relation
+    "yes",
 ]
 
 input_data_2NF = [
@@ -23,8 +23,8 @@ input_data_2NF = [
     "fname, lname",
     "",
     "",
-    "lname",
-    "home_address",
+    "lname",  # Determinant = a subset of the primary key but not the entire primary key
+    "home_address",  # Dependent = a non-key attribute, therefore partial functional dependency
     "no",
     "yes",
     "yes",
@@ -33,90 +33,92 @@ input_data_2NF = [
 ]
 
 input_data_3NF = [
-    "3NF",  # Select normalization form
-    "student",  # Enter relation name
-    "fname, lname, ssn, home_address, phone_number",  # Enter attributes
-    "",  # Enter primary keys (leave blank as in the example)
-    "",  # Enter candidate keys (leave blank as in the example)
-    "",  # Enter foreign keys (leave blank as in the example)
-    "student_id",  # Determinant attributes for first functional dependency
-    "ssn",  # Dependent attributes for first functional dependency
-    "yes",  # Add another functional dependency
-    "ssn",  # Determinant attributes for second functional dependency
-    "home_address",  # Dependent attributes for second functional dependency
-    "no",  # Stop adding functional dependencies
-    "yes",  # Is 'fname' atomic?
-    "yes",  # Is 'lname' atomic?
-    "yes",  # Is 'ssn' atomic?
-    "yes",  # Is 'home_address' atomic?
-    "no",  # Is 'phone_number' atomic?
-    "yes",  # Is 'student_id' atomic?
+    "3NF",
+    "student",
+    "fname, lname, ssn, home_address, phone_number",
+    "",
+    "",
+    "",
+    "student_id",  # Determinant = primary key
+    "ssn",  # Dependent = non-key
+    "yes",
+    "ssn",  # Determinant = non-key attribute determined by another functional dependency on the primary key
+    "home_address",  # Dependent = non-key attribute, therefore transitive functional dependency
+    "no",
+    "yes",
+    "yes",
+    "yes",
+    "yes",
+    "no",
+    "yes",
 ]
 
 input_data_BCNF = [
-    "BCNF",  # Select normalization form
-    "student",  # Enter relation name
-    "fname, lname, ssn, address",  # Enter attributes
-    "fname, lname",  # Enter primary keys
-    "",  # Enter candidate keys (leave blank as in the example)
-    "",  # Enter foreign keys (leave blank as in the example)
-    "fname, lname, address",  # Determinant attributes for functional dependency
-    "ssn",  # Dependent attribute for functional dependency
-    "no",  # Stop adding functional dependencies
-    "yes",  # Is 'fname' atomic?
-    "yes",  # Is 'lname' atomic?
-    "yes",  # Is 'ssn' atomic?
-    "yes",  # Is 'address' atomic?
+    "BCNF",
+    "student",
+    "fname, lname, ssn, address",
+    "fname, lname",
+    "",
+    "",
+    "fname, lname, address",  # Determinant = primary key + another attribute, therefore the functional dependency isn't in BCNF
+    "ssn",  # Dependent
+    "no",
+    "yes",
+    "yes",
+    "yes",
+    "yes",
 ]
 
 input_data_4NF = [
-    "4NF",  # Select normalization form
-    "student",  # Enter relation name
-    "fname, lname",  # Enter attributes
-    "",  # Enter primary keys (leave blank as in the example)
-    "",  # Enter candidate keys (leave blank as in the example)
-    "",  # Enter foreign keys (leave blank as in the example)
-    "student_id",  # Determinant attribute for functional dependency
-    "fname, lname",  # Dependent attributes for functional dependency
-    "no",  # Stop adding functional dependencies
-    "james, cunningham, 1",  # Enter tuple values for first data tuple
-    "yes",  # Confirm to add another data tuple
-    "trevin, distefano, 1",  # Enter tuple values for second data tuple
-    "no",  # Stop adding data tuples
-    "yes",  # Confirm 'fname' is atomic
-    "yes",  # Confirm 'lname' is atomic
-    "yes",  # Is 'student_id' atomic?
+    "4NF",
+    "student",
+    "fname, lname",
+    "",
+    "",
+    "",
+    "student_id",
+    "fname, lname",
+    "no",
+    "james, cunningham, 1",  # data insertion
+    "yes",
+    "trevin, distefano, 1",  # data insertion with the primary key equaling another tuple in the relation: "james, cunningham, 1", therefore a MVD is detected
+    "no",
+    "yes",
+    "yes",
+    "yes",
     "2",
 ]
 
 input_data_5NF = [
-    "5NF",  # Select 5NF normalization form
-    "music_purchase",  # Relation name
-    "customer_id,artist_id,song_id",  # Attributes
-    "customer_id,artist_id;artist_id,song_id;customer_id,song_id",  # Primary keys
-    "",  # Default candidate keys
-    "",  # Default foreign keys
-    "customer_id,artist_id",  # Determinant attributes for first functional dependency
-    "song_id",  # Dependent attribute
-    "yes",  # Add another functional dependency
-    "customer_id,song_id",  # Determinant attributes for second functional dependency
-    "artist_id",  # Dependent attribute
-    "yes",  # Add another functional dependency
-    "artist_id,song_id",  # Determinant attributes for third functional dependency
-    "customer_id",  # Dependent attribute
-    "no",  # Stop adding functional dependencies
-    "1, 2, 3",  # Data tuple 1
-    "yes",  # Add another data tuple
-    "1, 3, 4",  # Data tuple 2
-    "yes",  # Add another data tuple
-    "2, 2, 3",  # Data tuple 3
-    "yes",  # Add another data tuple
-    "2, 3, 4",  # Data tuple 4
-    "no",  # Stop adding data tuples
-    "yes",  # Is 'customer_id' atomic?
-    "yes",  # Is 'artist_id' atomic?
-    "yes",  # Is 'song_id' atomic?
+    "5NF",
+    "music_purchase",
+    "customer_id,artist_id,song_id",
+    "customer_id,artist_id;artist_id,song_id;customer_id,song_id",
+    "",
+    "",
+    "customer_id,artist_id",  # Determinant = ONE of the primary / candidate keys
+    "song_id",  # Dependent = a key attribute
+    "yes",
+    "customer_id,song_id",
+    "artist_id",
+    "yes",
+    "artist_id,song_id",
+    "customer_id",
+    "no",
+    "1, 2, 3",
+    "yes",
+    "1, 3, 4",
+    "yes",
+    "2, 2, 3",
+    "yes",
+    "2, 3, 4",
+    "no",
+    "yes",
+    "yes",
+    "yes",
 ]
+
+# Prompt user to select a normalization form
 user_choice = input("Select normalization form (1, 2, 3, B, 4, 5): ")
 
 # Choose the appropriate input_data list based on user choice
@@ -135,9 +137,7 @@ elif user_choice == "5":
 else:
     raise ValueError("Invalid choice! Please select 1, 2, 3, B, 4, or 5.")
 
-
-# Use patch to simulate input() calls
+# Use patch to simulate input() calls with selected data for testing
 with patch("builtins.input") as mock_input:
-    # Configure mock to return each value in selected_input_data on each call to input()
     mock_input.side_effect = selected_input_data
-    main()  # Run the main function, which will now use the selected mocked inputs
+    main()  # Run the main function with mocked inputs
