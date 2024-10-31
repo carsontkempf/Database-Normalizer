@@ -57,22 +57,32 @@ def remove_duplicate_attributes(attributes):
 
 
 def fix_non_atomic_attributes(parent_relation, anomalies):
-    primary_key = [str(pk) for pk in parent_relation.primary_key]
-    all_parent_attributes = [str(attr) for attr in parent_relation.attributes]
-    new_relations = []
+    relations_in_1NF = []
 
-    # Create a new relation for each non-atomic attribute
+    all_parent_attributes = [str(attr) for attr in parent_relation.attributes]
+
     for anomaly in anomalies:
-        uncleaned_attributes = primary_key + [anomaly]
-        cleaned_attributes = remove_duplicate_attributes(uncleaned_attributes)
         new_relation = Relation(
-            name=f"{parent_relation.name}_{anomaly}", attributes=cleaned_attributes
+            name=f"{parent_relation.name}_{anomaly}",
+            attributes=parent_relation.primary_key[:],
         )
-        new_relation.primary_key = primary_key[:]
-        new_relations.append(new_relation)
+
+        new_relation.attributes.append(anomaly)
+
+        relations_in_1NF.append(new_relation)
 
         if anomaly in all_parent_attributes:
             all_parent_attributes.remove(anomaly)
+
+    if all_parent_attributes:
+        new_relation = Relation(
+            name=f"{parent_relation.name}_remaining",
+            attributes=all_parent_attributes,
+        )
+
+        relations_in_1NF.append(new_relation)
+
+    return relations_in_1NF
 
     # If there are remaining attributes, add them as a final relation
     if all_parent_attributes:
@@ -385,7 +395,6 @@ def normalize_1NF(relation):
     for count, final_relation in enumerate(final_1NF_relations, start=1):
         final_relation.name = str(count)
         final_relation.print_relation()
-        print_data(final_relation)
 
     return final_1NF_relations
 
