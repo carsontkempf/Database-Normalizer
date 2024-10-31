@@ -116,8 +116,6 @@ input_data_5NF = [
     "yes",  # Is 'artist_id' atomic?
     "yes",  # Is 'song_id' atomic?
 ]
-
-# Prompt the user to select a normalization form
 user_choice = input("Select normalization form (1, 2, 3, B, 4, 5): ")
 
 # Choose the appropriate input_data list based on user choice
@@ -135,6 +133,7 @@ elif user_choice == "5":
     selected_input_data = input_data_5NF
 else:
     raise ValueError("Invalid choice! Please select 1, 2, 3, B, 4, or 5.")
+
 
 # Use patch to simulate input() calls
 with patch("builtins.input") as mock_input:

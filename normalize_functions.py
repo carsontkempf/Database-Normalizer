@@ -140,10 +140,20 @@ def fix_partial_functional_dependencies(parent_relation, anomalies):
 
 
 def fix_transitive_functional_dependencies(parent_relation, transitive_dependencies):
-    relations_in_3NF = []
+    # Check if there are fewer than two functional dependencies; if so, no fixing is needed
+    if len(parent_relation.functional_dependencies) < 2:
+        return [
+            parent_relation
+        ]  # Return the original relation as a single-element list
 
-    # Collect all attributes of the parent relation
-    all_parent_attributes = [str(attr).strip() for attr in parent_relation.attributes]
+    relations_in_3NF = []
+    # Flatten and clean all attributes in parent_relation to remove any nested lists
+    all_parent_attributes = []
+    for attr in parent_relation.attributes:
+        if isinstance(attr, list):
+            all_parent_attributes.extend(str(sub_attr).strip() for sub_attr in attr)
+        else:
+            all_parent_attributes.append(str(attr).strip())
 
     # Flatten and clean all transitive dependency attributes
     combined_dependencies = set()  # Use a set to handle duplicates
@@ -155,8 +165,12 @@ def fix_transitive_functional_dependencies(parent_relation, transitive_dependenc
             if cleaned_attr:  # Only add non-empty attributes
                 combined_dependencies.add(cleaned_attr)
 
-    # Convert to a list for easier manipulation
-    combined_dependencies = list(combined_dependencies)
+    # Convert combined dependencies to a list for easier manipulation
+    combined_dependencies = [
+        attr
+        for attr in combined_dependencies
+        if attr not in parent_relation.primary_key
+    ]
 
     if combined_dependencies:
         print_normalization_stage(
@@ -165,21 +179,13 @@ def fix_transitive_functional_dependencies(parent_relation, transitive_dependenc
     else:
         print_normalization_stage("No transitive functional dependencies found.")
 
-    # Initialize a single relation with primary key and combined dependencies as attributes
+    # Initialize a new relation with primary key and combined dependencies as attributes
     new_relation = Relation(
         name=f"{parent_relation.name}_transitive",
-        attributes=parent_relation.primary_key[:],  # Start with primary key attributes
+        attributes=combined_dependencies,  # Start with primary key attributes
     )
 
-    # Remove primary key attributes from combined_dependencies
-    combined_dependencies = [
-        attr
-        for attr in combined_dependencies
-        if attr not in parent_relation.primary_key
-    ]
-
-    # Add the combined transitive dependency attributes to the new relation
-    new_relation.attributes.extend(combined_dependencies)
+    # Add only non-primary key combined dependencies to new relation
     new_relation.add_primary_key(parent_relation.primary_key)
 
     # Add a functional dependency with primary key as X and combined dependencies as Y
@@ -190,8 +196,8 @@ def fix_transitive_functional_dependencies(parent_relation, transitive_dependenc
     # Append the new relation to the list
     relations_in_3NF.append(new_relation)
 
-    # Remove combined transitive dependency attributes from all_parent_attributes to prevent duplication
-    for attr in combined_dependencies:
+    # Remove combined transitive dependency attributes and primary key from all_parent_attributes
+    for attr in combined_dependencies + parent_relation.primary_key:
         if attr in all_parent_attributes:
             all_parent_attributes.remove(attr)
 
@@ -205,6 +211,12 @@ def fix_transitive_functional_dependencies(parent_relation, transitive_dependenc
         relations_in_3NF.append(remaining_relation)
 
     return relations_in_3NF
+
+
+def determinants_equal_superkey(relation):
+    primary_key = relation.primary_key  # Assuming relation has a primary_key attribute
+    for fd in relation.functional_dependencies:
+        fd.adjust_to_primary_key(primary_key)  # Adjust determinant to match primary key
 
 
 def fix_mvds(relation, mvds):
@@ -412,32 +424,31 @@ def normalize_3NF(relation):
 
 def normalize_BCNF(relation):
     print_normalization_stage("BCNF Normalization Started")
-    relations = normalize_3NF(relation)
+    list_of_3NF_relations = normalize_3NF(relation)
     final_BCNF_relations = []
 
-    for rel in relations:
+    for rel in list_of_3NF_relations:
         anomalies = detect_BCNF_anomalies(rel)
-        if anomalies:
-            print(f"Detected BCNF anomalies: {', '.join(str(a) for a in anomalies)}")
-        else:
-            print("All determinants are equal to a primary key.")
-        stored_fds = rel.functional_dependencies[:]
-        stored_data = rel.data[:]
+        stored_data = rel.data[:]  # Store original data for each relation
 
         if anomalies:
-            list_of_BCNF_relations = decompose_relation(rel, anomalies, "B", stored_fds)
-            for decomposed_relation in list_of_BCNF_relations:
-                decomposed_relation.functional_dependencies = stored_fds[:]
-                decomposed_relation.data = stored_data[:]
-                final_BCNF_relations.append(decomposed_relation)
+            print_normalization_stage(
+                f"Detected determinants that are not superkeys: {', '.join(str(anomaly) for anomaly in anomalies)}"
+            )
+
+            # Apply the determinants_equal_superkey function to adjust FDs
+            determinants_equal_superkey(rel)
+            rel.data = stored_data[:]  # Assign stored data back to the relation
+            final_BCNF_relations.append(rel)
         else:
+            print_normalization_stage("No BCNF violations found.")
             final_BCNF_relations.append(rel)
 
+    # Print the final relations in BCNF
     print_normalization_stage("Relations in BCNF")
     for count, final_relation in enumerate(final_BCNF_relations, start=1):
         final_relation.name = str(count)
         final_relation.print_relation()
-        print_data(final_relation)
 
     return final_BCNF_relations
 
@@ -602,7 +613,8 @@ def detect_BCNF_anomalies(relation):
     anomalies = []
     primary_key_sets = [set(str(pk).split("|")) for pk in relation.primary_key]
     for fd in relation.functional_dependencies:
-        fd_x = set(fd.get_x())
+        fd_x_raw = fd.get_x()  # Get the raw value
+        fd_x = set(tuple(x) if isinstance(x, list) else x for x in fd_x_raw)
         if not any(fd_x.issuperset(pk) for pk in primary_key_sets):
             anomalies.append(fd)
     return anomalies
