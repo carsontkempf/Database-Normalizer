@@ -439,7 +439,6 @@ def normalize_4NF(relation):
                 rel.data = stored_data[:]
                 final_4NF_relations.append(rel)
         else:
-            print_normalization_stage("No multivalued dependencies found.")
             final_4NF_relations.append(bcnf_relation)
 
     print_normalization_stage("Relations in 4NF")
@@ -624,7 +623,7 @@ def detect_4NF_anomalies(relation):
         if primary_key_value in unique_keys:
             print_divider()
             print(
-                f"Anomaly detected in tuple {i} with primary key value = '{primary_key_value}'"
+                f"Multi-Valued Dependency detected in tuple {i} with primary key value = '{primary_key_value}'"
             )
             new_value = str(
                 input(
